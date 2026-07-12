@@ -34,6 +34,11 @@ header{background:var(--dk);position:sticky;top:0;z-index:100;border-bottom:1px 
 .btn-signup{background:var(--or);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
 .btn-signup:hover{background:var(--or2)}
 .mobile-menu-btn{display:none;background:none;border:none;color:#fff;font-size:22px;cursor:pointer}
+.mobile-nav{display:none;flex-direction:column;background:#111;border-top:1px solid #2a2a2a;padding:8px 16px 16px}
+.mobile-nav.open{display:flex}
+.mobile-nav button{background:none;border:none;color:#ddd;text-align:left;padding:12px 4px;font-size:15px;font-weight:600;border-bottom:1px solid #222;cursor:pointer}
+.mobile-nav button:last-child{border-bottom:none}
+.mobile-nav button.act{color:var(--or)}
 
 /* ===== PAGES ===== */
 .page{display:none}.page.act{display:block}
@@ -347,9 +352,18 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
     </nav>
     <div class="hdr-right">
       <span id="hdr-auth-box" style="display:flex;gap:8px"></span>
-      <button class="mobile-menu-btn" onclick="toast2('📱 Menu mobile')">☰</button>
+      <button class="mobile-menu-btn" onclick="toggleMobileNav()">☰</button>
     </div>
   </div>
+  <nav class="mobile-nav" id="mobile-nav">
+    <button class="hn act" onclick="gpMobile('accueil',this)">Accueil</button>
+    <button class="hn" onclick="gpMobile('comment',this)">Comment ça marche</button>
+    <button class="hn" onclick="gpMobile('commander',this)">Commander</button>
+    <button class="hn" onclick="gpMobile('suivi',this)">Suivi</button>
+    <button class="hn" onclick="gpMobile('livreur',this)">Devenir livreur</button>
+    <button class="hn" onclick="gpMobile('contact',this)">Contact</button>
+    <button class="hn" id="hn-admin-m" style="display:none" onclick="gpMobile('admin',this)">🛠️ Admin</button>
+  </nav>
 </header>
 
 <!-- ============ ACCUEIL ============ -->
@@ -585,22 +599,19 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
       </div>
       <div class="dash-main">
         <div class="dash-banner">
-          <div class="db-left"><h3 id="db-hello">Bonjour 👋</h3><p>Vous avez 2 commandes en cours aujourd'hui</p></div>
+          <div class="db-left"><h3 id="db-hello">Bonjour 👋</h3><p id="db-souscount">Chargement de vos commandes...</p></div>
           <button class="btn-wh" onclick="gp('commander',null)">+ Nouvelle commande</button>
         </div>
         <div class="kpis">
-          <div class="kpi"><div class="kpi-v">12</div><div class="kpi-l">Commandes totales</div><div class="kpi-sub" style="color:#aaa">Depuis l'inscription</div></div>
-          <div class="kpi"><div class="kpi-v" style="color:var(--or)">2</div><div class="kpi-l">En cours</div><div class="kpi-sub" style="color:var(--or)">Active maintenant</div></div>
-          <div class="kpi"><div class="kpi-v" style="color:var(--gr)">10</div><div class="kpi-l">Terminées</div><div class="kpi-sub" style="color:var(--gr)">Succès</div></div>
-          <div class="kpi"><div class="kpi-v" style="color:var(--or)">25K</div><div class="kpi-l">Total dépensé</div><div class="kpi-sub" style="color:#aaa">FCFA</div></div>
+          <div class="kpi"><div class="kpi-v" id="kpi-total">0</div><div class="kpi-l">Commandes totales</div><div class="kpi-sub" style="color:#aaa">Depuis l'inscription</div></div>
+          <div class="kpi"><div class="kpi-v" style="color:var(--or)" id="kpi-encours">0</div><div class="kpi-l">En cours</div><div class="kpi-sub" style="color:var(--or)">Active maintenant</div></div>
+          <div class="kpi"><div class="kpi-v" style="color:var(--gr)" id="kpi-terminees">0</div><div class="kpi-l">Terminées</div><div class="kpi-sub" style="color:var(--gr)">Succès</div></div>
+          <div class="kpi"><div class="kpi-v" style="color:var(--or)" id="kpi-depense">0</div><div class="kpi-l">Total dépensé</div><div class="kpi-sub" style="color:#aaa">FCFA</div></div>
         </div>
         <div class="table-card">
-          <div class="tc-hd"><h4>Dernières commandes</h4><button class="voir-plus" onclick="toast2('📋 Historique complet')">Voir tout →</button></div>
+          <div class="tc-hd"><h4>Dernières commandes</h4><button class="voir-plus" onclick="gp('suivi',null)">Voir tout →</button></div>
           <div class="tbl-hd"><span>N° Commande</span><span>Livreur</span><span>Statut</span><span>Prix</span><span>Date</span></div>
-          <div class="tbl-r"><span class="tid">#MTK12569</span><span>Moustapha Diallo</span><span><span class="bs bs-ec">En cours</span></span><span>2 500 F</span><span>12 Mai 2024</span></div>
-          <div class="tbl-r"><span class="tid">#MTK12520</span><span>Ibrahima Ndiaye</span><span><span class="bs bs-ok">Terminée</span></span><span>2 000 F</span><span>10 Mai 2024</span></div>
-          <div class="tbl-r"><span class="tid">#MTK12450</span><span>Cheikh Fall</span><span><span class="bs bs-ok">Terminée</span></span><span>3 000 F</span><span>08 Mai 2024</span></div>
-          <div class="tbl-r"><span class="tid">#MTK12390</span><span>Mamadou Sarr</span><span><span class="bs bs-ok">Terminée</span></span><span>2 200 F</span><span>05 Mai 2024</span></div>
+          <div id="dsb-commandes-tbody"><div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Chargement...</div></div>
         </div>
       </div>
     </div>
@@ -911,6 +922,14 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
 <script>
 let basePkg = 500;
 
+function toggleMobileNav(){
+  document.getElementById('mobile-nav').classList.toggle('open');
+}
+function gpMobile(id, el){
+  gp(id, el);
+  document.getElementById('mobile-nav').classList.remove('open');
+}
+
 /* ================= AUTH / UTILISATEURS (via API serveur) ================= */
 let currentUser = null;
 
@@ -1005,6 +1024,7 @@ async function loginUser(){
 }
 
 async function logout(){
+  if(!confirm('Voulez-vous vraiment vous déconnecter ?')) return;
   try{ await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }); }catch(e){}
   currentUser = null;
   refreshHeader();
@@ -1015,13 +1035,16 @@ async function logout(){
 function refreshHeader(){
   const box = document.getElementById('hdr-auth-box');
   const adminLink = document.getElementById('hn-admin');
+  const adminLinkM = document.getElementById('hn-admin-m');
   if(currentUser){
     const target = currentUser.role === 'admin' ? 'admin' : currentUser.role === 'livreur' ? 'livreur-espace' : 'dashboard';
     box.innerHTML = '<button class="btn-login" onclick="gp(\''+target+'\',null)">👤 '+currentUser.prenom+'</button><button class="btn-signup" onclick="logout()">Déconnexion</button>';
     adminLink.style.display = currentUser.role === 'admin' ? 'inline-block' : 'none';
+    adminLinkM.style.display = currentUser.role === 'admin' ? 'block' : 'none';
   } else {
     box.innerHTML = '<button class="btn-login" onclick="gp(\'connexion\',null)">Se connecter</button><button class="btn-signup" onclick="gp(\'inscription\',null)">S\'inscrire</button>';
     adminLink.style.display = 'none';
+    adminLinkM.style.display = 'none';
   }
 }
 
@@ -1031,12 +1054,39 @@ function requireAuth(role){
   return true;
 }
 
-function renderClientDashboard(){
+async function renderClientDashboard(){
   if(!currentUser) return;
   document.getElementById('dsb-name').textContent = currentUser.prenom + ' ' + currentUser.nom;
   document.getElementById('db-hello').textContent = 'Bonjour, ' + currentUser.prenom + ' 👋';
   const av = document.getElementById('dsb-av');
   av.innerHTML = currentUser.photo ? '<img src="'+currentUser.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : '🧑🏿';
+
+  try{
+    const res = await fetch('/api/commandes/mes', { credentials: 'same-origin' });
+    const data = await res.json();
+    const commandes = data.commandes || [];
+    const enCours = commandes.filter(c => ['en_attente','acceptee','en_route'].includes(c.statut));
+    const terminees = commandes.filter(c => c.statut === 'livree');
+    const totalDepense = terminees.reduce((sum, c) => sum + (c.prix || 0), 0);
+
+    document.getElementById('kpi-total').textContent = commandes.length;
+    document.getElementById('kpi-encours').textContent = enCours.length;
+    document.getElementById('kpi-terminees').textContent = terminees.length;
+    document.getElementById('kpi-depense').textContent = totalDepense.toLocaleString('fr-FR');
+    document.getElementById('db-souscount').textContent = enCours.length
+      ? 'Vous avez ' + enCours.length + ' commande(s) en cours en ce moment'
+      : 'Aucune commande en cours pour le moment';
+
+    const labelStatut = { en_attente: ['En attente','bs-ec'], acceptee: ['Acceptée','bs-ec'], en_route: ['En route','bs-ec'], livree: ['Terminée','bs-ok'], annulee: ['Annulée','bs-ec'] };
+    const tbody = document.getElementById('dsb-commandes-tbody');
+    const dernieres = commandes.slice(0, 5);
+    tbody.innerHTML = dernieres.length ? dernieres.map(c => {
+      const [libelle, classe] = labelStatut[c.statut] || [c.statut, 'bs-ec'];
+      return `<div class="tbl-r"><span class="tid">#${c.id.slice(-6).toUpperCase()}</span><span>${c.livreur ? c.livreur.prenom + ' ' + c.livreur.nom : '—'}</span><span><span class="bs ${classe}">${libelle}</span></span><span>${c.prix ? c.prix.toLocaleString('fr-FR') + ' F' : (c.prixSuggere.toLocaleString('fr-FR') + ' F (suggéré)')}</span><span>${c.dateCreationAffichage.split(' ')[0]}</span></div>`;
+    }).join('') : '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Aucune commande pour le moment — <a href="#" onclick="gp(\'commander\',null);return false" style="color:var(--or);font-weight:700">passez votre première commande</a></div>';
+  }catch(e){
+    document.getElementById('db-souscount').textContent = 'Impossible de charger vos commandes';
+  }
 }
 
 function renderLivreurEspace(){
