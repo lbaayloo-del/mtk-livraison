@@ -124,6 +124,7 @@ app.post('/api/register', (req, res, next) => {
     permis,
     vehicule: vehicule || '',
     zone: zone || '',
+    statut: role === 'livreur' ? 'en_attente' : 'approuve',
     dateInscription: new Date().toLocaleDateString('fr-FR')
   };
   db.users.push(user);
@@ -165,6 +166,19 @@ function requireAdmin(req, res, next) {
 app.get('/api/admin/users', requireAdmin, (req, res) => {
   const db = loadDB();
   res.json({ users: db.users.map(publicUser) });
+});
+
+app.patch('/api/admin/users/:id/statut', requireAdmin, (req, res) => {
+  const { statut } = req.body || {};
+  if (!['en_attente', 'approuve', 'refuse'].includes(statut)) {
+    return res.status(400).json({ error: 'Statut invalide' });
+  }
+  const db = loadDB();
+  const user = db.users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'Utilisateur introuvable' });
+  user.statut = statut;
+  saveDB(db);
+  res.json({ user: publicUser(user) });
 });
 
 app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
