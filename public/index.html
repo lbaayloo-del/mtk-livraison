@@ -801,8 +801,8 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
       </div>
       <div>
         <div class="stag">Statut du dossier</div>
-        <h2 style="font-size:22px">En cours de vérification</h2>
-        <p style="color:#888;font-size:13px;line-height:1.7;max-width:420px">Votre dossier a bien été enregistré sur MTK Livraison. Notre équipe vérifie votre pièce d'identité avant l'activation complète de votre compte livreur — vous serez contacté(e) sous 24h.</p>
+        <h2 id="ll-statut-titre" style="font-size:22px">En cours de vérification</h2>
+        <p id="ll-statut-texte" style="color:#888;font-size:13px;line-height:1.7;max-width:420px">Votre dossier a bien été enregistré sur MTK Livraison. Notre équipe vérifie votre pièce d'identité avant l'activation complète de votre compte livreur — vous serez contacté(e) sous 24h.</p>
       </div>
     </div>
   </div>
@@ -821,8 +821,8 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
     </div>
     <div class="table-card">
       <div class="tc-hd"><h4>Utilisateurs inscrits</h4><button class="voir-plus" onclick="renderAdmin()">🔄 Rafraîchir</button></div>
-      <div class="tbl-hd" style="grid-template-columns:0.6fr 1.4fr 1.3fr 0.8fr 0.9fr 1fr 0.6fr">
-        <span>Photo</span><span>Nom</span><span>Contact</span><span>Rôle</span><span>Inscrit le</span><span>Pièce d'identité</span><span></span>
+      <div class="tbl-hd" style="grid-template-columns:0.6fr 1.2fr 1.1fr 0.7fr 0.8fr 0.8fr 0.9fr 1.1fr">
+        <span>Photo</span><span>Nom</span><span>Contact</span><span>Rôle</span><span>Inscrit le</span><span>Pièce d'identité</span><span>Statut</span><span></span>
       </div>
       <div id="admin-tbody"></div>
     </div>
@@ -1084,11 +1084,33 @@ function renderLivreurEspace(){
   document.getElementById('ll-tel').textContent = currentUser.telephone || '—';
   document.getElementById('ll-vehicule').textContent = currentUser.vehicule || '—';
   document.getElementById('ll-zone').textContent = currentUser.zone || '—';
-  document.getElementById('ll-permis-status').textContent = currentUser.permis ? '✅ Reçue, en cours de vérification' : '❌ Non fournie';
+  document.getElementById('ll-permis-status').textContent = currentUser.permis ? '✅ Reçue' : '❌ Non fournie';
   const img = document.getElementById('ll-photo');
   const fallback = document.getElementById('ll-photo-fallback');
   if(currentUser.photo){ img.src = currentUser.photo; img.style.display = 'block'; fallback.style.display = 'none'; }
   else { img.style.display = 'none'; fallback.style.display = 'flex'; }
+
+  const titre = document.getElementById('ll-statut-titre');
+  const texte = document.getElementById('ll-statut-texte');
+  if(currentUser.statut === 'approuve'){
+    titre.textContent = '✅ Compte approuvé';
+    titre.style.color = 'var(--gr)';
+    texte.textContent = 'Votre dossier a été validé par l’équipe MTK Livraison. Vous pouvez commencer à effectuer des livraisons.';
+  } else if(currentUser.statut === 'refuse'){
+    titre.textContent = '❌ Dossier refusé';
+    titre.style.color = '#d33';
+    texte.textContent = 'Votre dossier n’a pas été validé. Contactez le support MTK Livraison pour plus d’informations ou pour soumettre un nouveau document.';
+  } else {
+    titre.textContent = 'En cours de vérification';
+    titre.style.color = '';
+    texte.textContent = 'Votre dossier a bien été enregistré sur MTK Livraison. Notre équipe vérifie votre pièce d’identité avant l’activation complète de votre compte livreur — vous serez contacté(e) sous 24h.';
+  }
+}
+
+function statutBadge(statut){
+  if(statut === 'approuve') return '<span class="bs bs-ok">✅ Approuvé</span>';
+  if(statut === 'refuse') return '<span class="bs" style="background:#fde3e3;color:#c0392b">❌ Refusé</span>';
+  return '<span class="bs bs-ec">⏳ En attente</span>';
 }
 
 async function renderAdmin(){
@@ -1102,16 +1124,36 @@ async function renderAdmin(){
     document.getElementById('admin-k-livreurs').textContent = users.filter(u => u.role === 'livreur').length;
     const tbody = document.getElementById('admin-tbody');
     const rows = users.map(u => `
-      <div class="tbl-r" style="grid-template-columns:0.6fr 1.4fr 1.3fr 0.8fr 0.9fr 1fr 0.6fr">
+      <div class="tbl-r" style="grid-template-columns:0.6fr 1.2fr 1.1fr 0.7fr 0.8fr 0.8fr 0.9fr 1.1fr">
         <span>${u.photo ? `<img src="${u.photo}" style="width:34px;height:34px;border-radius:50%;object-fit:cover">` : '<div style="width:34px;height:34px;border-radius:50%;background:#eee"></div>'}</span>
         <span>${u.prenom} ${u.nom}</span>
         <span>${u.email}<br><span style="color:#aaa">${u.telephone || ''}</span></span>
         <span><span class="bs ${u.role === 'livreur' ? 'bs-ec' : 'bs-ok'}" style="text-transform:capitalize">${u.role}</span></span>
         <span>${u.dateInscription || ''}</span>
         <span>${u.permis ? `<a href="${u.permis}" target="_blank" style="color:var(--or);font-weight:700;text-decoration:none">📎 Voir</a>` : '—'}</span>
-        <span>${u.role !== 'admin' ? `<button class="btn-sm-o" onclick="deleteUser('${u.id}')">Suppr.</button>` : ''}</span>
+        <span>${u.role === 'livreur' ? statutBadge(u.statut) : ''}</span>
+        <span style="display:flex;gap:4px;flex-wrap:wrap">
+          ${u.role === 'livreur' && u.statut !== 'approuve' ? `<button class="btn-sm-o" style="color:var(--gr);border-color:var(--gr)" onclick="changerStatut('${u.id}','approuve')">✅</button>` : ''}
+          ${u.role === 'livreur' && u.statut !== 'refuse' ? `<button class="btn-sm-o" style="color:#c0392b;border-color:#c0392b" onclick="changerStatut('${u.id}','refuse')">❌</button>` : ''}
+          ${u.role !== 'admin' ? `<button class="btn-sm-o" onclick="deleteUser('${u.id}')">Suppr.</button>` : ''}
+        </span>
       </div>`).join('');
     tbody.innerHTML = rows || '<div style="padding:24px;text-align:center;color:#aaa;font-size:12px">Aucun utilisateur inscrit pour le moment</div>';
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+async function changerStatut(id, statut){
+  try{
+    const res = await fetch('/api/admin/users/' + id + '/statut', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ statut })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Action impossible')); return; }
+    renderAdmin();
+    toast2(statut === 'approuve' ? '✅ Livreur approuvé' : '❌ Livreur refusé');
   }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
 }
 
