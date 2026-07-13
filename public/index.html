@@ -1423,8 +1423,8 @@ async function loadSuivi(){
         <div class="sv-field"><span class="sv-fl">Arrivée</span><span class="sv-fv">${c.arrivee}</span></div>
         <div class="sv-field"><span class="sv-fl">Type</span><span class="sv-fv">📦 ${c.typeColis}</span></div>
         <div class="sv-field"><span class="sv-fl">Date</span><span class="sv-fv">${c.dateCreationAffichage}</span></div>
-        <div class="sv-prix">${c.prix.toLocaleString('fr-FR')} FCFA</div>
-        ${c.statut === 'en_attente' ? `<button class="btn-full" style="grid-column:unset" onclick="gp('offres',null)">Choisir un livreur</button>` : ''}
+        <div class="sv-prix">${c.prix ? c.prix.toLocaleString('fr-FR') + ' FCFA' : c.prixSuggere.toLocaleString('fr-FR') + ' FCFA (suggéré)'}</div>
+        ${c.statut === 'en_attente' ? `<button class="btn-full" style="grid-column:unset" onclick="commandeActuelleId='${c.id}';gp('offres',null)">Choisir un livreur</button>` : ''}
         ${(c.statut === 'en_attente' || c.statut === 'acceptee') ? `<button class="btn-sm-o" style="margin-top:8px" onclick="annulerCommande('${c.id}')">Annuler la commande</button>` : ''}
       </div>`).join('');
   }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
