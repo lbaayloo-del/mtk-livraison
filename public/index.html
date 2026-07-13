@@ -4,6 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MTK Livraison — Livraison Express Sénégal</title>
+<meta name="description" content="MTK Livraison connecte les clients aux meilleurs livreurs locaux à Dakar et environs. Livraison de colis, repas, courses et documents. Prix négociable, livreurs vérifiés.">
+<meta name="keywords" content="livraison Dakar, livraison Sénégal, coursier Dakar, livraison colis, livraison repas, MTK Livraison">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.mtklivraisonsn.dpdns.org/">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="MTK Livraison — Livraison Express Sénégal">
+<meta property="og:description" content="Livraison rapide et fiable partout au Sénégal. Le prix se discute, la confiance nous unit.">
+<meta property="og:url" content="https://www.mtklivraisonsn.dpdns.org/">
+<meta property="og:image" content="https://www.mtklivraisonsn.dpdns.org/og-image.png">
+<meta property="og:locale" content="fr_SN">
+
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="MTK Livraison — Livraison Express Sénégal">
+<meta name="twitter:description" content="Livraison rapide et fiable partout au Sénégal. Le prix se discute, la confiance nous unit.">
+
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
@@ -656,17 +672,22 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
   <div class="wrap section">
     <div class="stag">Bon retour</div>
     <h2>Connexion</h2>
-    <p class="ssub">Accédez à votre espace client, livreur ou administrateur</p>
+    <p class="ssub">Choisissez votre espace pour vous connecter</p>
     <div class="cmd-wrap">
       <div class="cmd-form" style="max-width:420px;margin:0 auto">
-        <h3>Se connecter</h3>
-        <p class="form-sub">Entrez vos identifiants</p>
+        <div class="mode-btns" style="margin-bottom:20px">
+          <button class="mode-btn sel" id="lg-tab-client" onclick="switchLoginRole('client')">🧑 Client</button>
+          <button class="mode-btn" id="lg-tab-livreur" onclick="switchLoginRole('livreur')">🏍️ Livreur</button>
+        </div>
+        <h3 id="lg-titre">Connexion client</h3>
+        <p class="form-sub" id="lg-sous-titre">Accédez à votre espace client</p>
         <div style="display:flex;flex-direction:column;gap:12px">
           <div class="fg"><label>Email *</label><input type="email" id="lg-email" placeholder="votre@email.com"></div>
           <div class="fg"><label>Mot de passe *</label><input type="password" id="lg-pass" placeholder="••••••••"></div>
           <button class="btn-full" style="grid-column:unset" onclick="loginUser()">🔐 Se connecter</button>
         </div>
         <p style="text-align:center;margin-top:16px;font-size:12px;color:#888">Pas encore de compte ? <a href="#" onclick="gp('inscription',null);return false" style="color:var(--or);font-weight:700;text-decoration:none">Inscrivez-vous</a></p>
+        <p style="text-align:center;margin-top:6px;font-size:11px;color:#bbb">Espace administrateur ? Connectez-vous depuis l'onglet Client avec vos identifiants admin.</p>
       </div>
     </div>
   </div>
@@ -1002,6 +1023,15 @@ async function registerUser(role){
   }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
 }
 
+let loginRoleActif = 'client';
+function switchLoginRole(role){
+  loginRoleActif = role;
+  document.getElementById('lg-tab-client').classList.toggle('sel', role === 'client');
+  document.getElementById('lg-tab-livreur').classList.toggle('sel', role === 'livreur');
+  document.getElementById('lg-titre').textContent = role === 'client' ? 'Connexion client' : 'Connexion livreur';
+  document.getElementById('lg-sous-titre').textContent = role === 'client' ? 'Accédez à votre espace client' : 'Accédez à votre espace livreur';
+}
+
 async function loginUser(){
   const email = document.getElementById('lg-email').value.trim();
   const password = document.getElementById('lg-pass').value;
@@ -1014,6 +1044,15 @@ async function loginUser(){
     });
     const data = await res.json();
     if(!res.ok){ toast2('❌ ' + (data.error || 'Connexion impossible')); return; }
+
+    // Vérifie que le compte correspond bien à l'onglet choisi (sauf pour l'admin, qui passe par l'onglet Client)
+    if(data.user.role !== 'admin' && data.user.role !== loginRoleActif){
+      const bonOnglet = data.user.role === 'livreur' ? 'Livreur' : 'Client';
+      toast2('⚠️ Ce compte est un compte ' + data.user.role + '. Utilisez l’onglet "' + bonOnglet + '" pour vous connecter.');
+      try{ await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }); }catch(e){}
+      return;
+    }
+
     currentUser = data.user;
     refreshHeader();
     toast2('✅ Connexion réussie ! Bienvenue ' + currentUser.prenom);
