@@ -156,6 +156,8 @@ header{background:var(--dk);position:sticky;top:0;z-index:100;border-bottom:1px 
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .fg{display:flex;flex-direction:column;gap:5px}
 .fg label{font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.06em}
+.pw-meter{height:5px;background:#eee;border-radius:3px;margin-top:6px;overflow:hidden}
+.pw-meter-bar{height:100%;width:0%;border-radius:3px;transition:width .2s,background .2s;background:#e33}
 .fg input,.fg select,.fg textarea{background:#f8f8f8;border:1.5px solid #e5e5e5;border-radius:9px;padding:11px 13px;color:var(--dk);font-size:13px;font-family:inherit;transition:border-color .15s}
 .fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--or);background:#fff}
 .fg textarea{resize:none;height:80px}
@@ -616,6 +618,10 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
         <button class="dsi" onclick="logout()">🚪 <span>Déconnexion</span></button>
       </div>
       <div class="dash-main">
+        <div id="verif-banner" style="display:none;background:#fff7f0;border:1.5px solid #ffd0aa;border-radius:12px;padding:12px 16px;font-size:12px;color:#a66;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <span>⚠️ Votre email n'est pas encore vérifié. Vérifiez votre boîte de réception.</span>
+          <button class="btn-sm-o" onclick="renvoyerVerification()">📩 Renvoyer l'email</button>
+        </div>
         <div class="dash-banner">
           <div class="db-left"><h3 id="db-hello">Bonjour 👋</h3><p id="db-souscount">Chargement de vos commandes...</p></div>
           <button class="btn-wh" onclick="gp('commander',null)">+ Nouvelle commande</button>
@@ -712,9 +718,18 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
             <div class="fg"><label>Prénom *</label><input type="text" id="rc-prenom" placeholder="Votre prénom"></div>
             <div class="fg"><label>Nom *</label><input type="text" id="rc-nom" placeholder="Votre nom"></div>
           </div>
-          <div class="fg"><label>Email *</label><input type="email" id="rc-email" placeholder="votre@email.com"></div>
+          <div class="fg">
+            <label>Email *</label>
+            <input type="email" id="rc-email" placeholder="votre@email.com" oninput="checkEmailField('rc-email')">
+            <div id="rc-email-msg" style="font-size:11px;margin-top:4px"></div>
+          </div>
           <div class="fg"><label>Téléphone *</label><input type="tel" id="rc-tel" placeholder="+221 7X XXX XX XX"></div>
-          <div class="fg"><label>Mot de passe *</label><input type="password" id="rc-pass" placeholder="Choisissez un mot de passe"></div>
+          <div class="fg">
+            <label>Mot de passe *</label>
+            <input type="password" id="rc-pass" placeholder="8 caractères min., avec au moins une lettre et un chiffre" oninput="checkPasswordField('rc-pass')">
+            <div class="pw-meter" id="rc-pass-meter"><div class="pw-meter-bar" id="rc-pass-bar"></div></div>
+            <div id="rc-pass-msg" style="font-size:11px;margin-top:4px"></div>
+          </div>
           <div class="fg">
             <label>Photo de profil</label>
             <div class="upload-zone" id="rc-photo-zone" style="display:flex;align-items:center;gap:10px;text-align:left" onclick="document.getElementById('rc-photo').click()">
@@ -732,9 +747,18 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
             <div class="fg"><label>Prénom *</label><input type="text" id="rl-prenom" placeholder="Votre prénom"></div>
             <div class="fg"><label>Nom *</label><input type="text" id="rl-nom" placeholder="Votre nom"></div>
           </div>
-          <div class="fg"><label>Email *</label><input type="email" id="rl-email" placeholder="votre@email.com"></div>
+          <div class="fg">
+            <label>Email *</label>
+            <input type="email" id="rl-email" placeholder="votre@email.com" oninput="checkEmailField('rl-email')">
+            <div id="rl-email-msg" style="font-size:11px;margin-top:4px"></div>
+          </div>
           <div class="fg"><label>Téléphone *</label><input type="tel" id="rl-tel" placeholder="+221 7X XXX XX XX"></div>
-          <div class="fg"><label>Mot de passe *</label><input type="password" id="rl-pass" placeholder="Choisissez un mot de passe"></div>
+          <div class="fg">
+            <label>Mot de passe *</label>
+            <input type="password" id="rl-pass" placeholder="8 caractères min., avec au moins une lettre et un chiffre" oninput="checkPasswordField('rl-pass')">
+            <div class="pw-meter" id="rl-pass-meter"><div class="pw-meter-bar" id="rl-pass-bar"></div></div>
+            <div id="rl-pass-msg" style="font-size:11px;margin-top:4px"></div>
+          </div>
           <div class="form-grid">
             <div class="fg"><label>Type de véhicule</label><select id="rl-vehicule"><option value="">Choisir</option><option>Moto / Jakarta</option><option>Vélo</option><option>Voiture</option><option>À pied</option></select></div>
             <div class="fg"><label>Zone préférée</label><input type="text" id="rl-zone" placeholder="Ex: Pikine, Guédiawaye..."></div>
@@ -770,6 +794,10 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
     <div class="stag">Espace livreur</div>
     <h2>Mon profil</h2>
     <p class="ssub">Votre dossier livreur MTK Livraison</p>
+    <div id="verif-banner-livreur" style="display:none;background:#fff7f0;border:1.5px solid #ffd0aa;border-radius:12px;padding:12px 16px;font-size:12px;color:#a66;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+      <span>⚠️ Votre email n'est pas encore vérifié. Vérifiez votre boîte de réception.</span>
+      <button class="btn-sm-o" onclick="renvoyerVerification()">📩 Renvoyer l'email</button>
+    </div>
     <div class="join-grid">
       <div class="join-form-card" style="max-width:340px">
         <div style="text-align:center">
@@ -953,6 +981,43 @@ function gpMobile(id, el){
   document.getElementById('mobile-nav').classList.remove('open');
 }
 
+function checkEmailField(inputId){
+  const val = document.getElementById(inputId).value.trim();
+  const msg = document.getElementById(inputId + '-msg');
+  if(!val){ msg.textContent = ''; return; }
+  const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+  msg.textContent = ok ? '✅ Format valide' : '⚠️ Format invalide (ex: nom@exemple.com)';
+  msg.style.color = ok ? 'var(--gr)' : '#c0392b';
+}
+
+function checkPasswordField(inputId){
+  const val = document.getElementById(inputId).value;
+  const bar = document.getElementById(inputId + '-bar');
+  const msg = document.getElementById(inputId + '-msg');
+  if(!val){ bar.style.width = '0%'; msg.textContent = ''; return; }
+
+  let score = 0;
+  if(val.length >= 8) score++;
+  if(val.length >= 12) score++;
+  if(/[a-z]/.test(val) && /[A-Z]/.test(val)) score++;
+  if(/[0-9]/.test(val)) score++;
+  if(/[^a-zA-Z0-9]/.test(val)) score++;
+
+  const valide = val.length >= 8 && /[a-zA-Z]/.test(val) && /[0-9]/.test(val);
+  const niveaux = [
+    { pct: 20, color: '#e33', label: 'Très faible' },
+    { pct: 40, color: '#e67e22', label: 'Faible' },
+    { pct: 60, color: '#f1c40f', label: 'Moyen' },
+    { pct: 80, color: '#2ecc71', label: 'Bon' },
+    { pct: 100, color: '#27ae60', label: 'Excellent' }
+  ];
+  const n = niveaux[Math.min(score, 4)];
+  bar.style.width = n.pct + '%';
+  bar.style.background = n.color;
+  msg.textContent = valide ? '✅ ' + n.label : '⚠️ Minimum 8 caractères, avec au moins une lettre et un chiffre';
+  msg.style.color = valide ? n.color : '#c0392b';
+}
+
 /* ================= AUTH / UTILISATEURS (via API serveur) ================= */
 let currentUser = null;
 
@@ -1095,8 +1160,26 @@ function requireAuth(role){
   return true;
 }
 
+async function renvoyerVerification(){
+  try{
+    const res = await fetch('/api/renvoyer-verification', { method: 'POST', credentials: 'same-origin' });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Impossible d’envoyer l’email')); return; }
+    toast2('✅ Email de vérification renvoyé !');
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+function afficherBandeauVerif(){
+  const b1 = document.getElementById('verif-banner');
+  const b2 = document.getElementById('verif-banner-livreur');
+  const nonVerifie = currentUser && currentUser.emailVerifie === false;
+  if(b1) b1.style.display = nonVerifie ? 'flex' : 'none';
+  if(b2) b2.style.display = nonVerifie ? 'flex' : 'none';
+}
+
 async function renderClientDashboard(){
   if(!currentUser) return;
+  afficherBandeauVerif();
   document.getElementById('dsb-name').textContent = currentUser.prenom + ' ' + currentUser.nom;
   document.getElementById('db-hello').textContent = 'Bonjour, ' + currentUser.prenom + ' 👋';
   const av = document.getElementById('dsb-av');
@@ -1132,6 +1215,7 @@ async function renderClientDashboard(){
 
 function renderLivreurEspace(){
   if(!currentUser) return;
+  afficherBandeauVerif();
   document.getElementById('ll-name').textContent = currentUser.prenom + ' ' + currentUser.nom;
   document.getElementById('ll-email').textContent = currentUser.email;
   document.getElementById('ll-tel').textContent = currentUser.telephone || '—';
@@ -1239,7 +1323,22 @@ function gp(id, el) {
   window.scrollTo(0, 0);
 }
 
+async function traiterLienVerification(){
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('verifier');
+  if(!token) return;
+  try{
+    const res = await fetch('/api/verifier-email/' + token);
+    const data = await res.json();
+    if(res.ok){ toast2('✅ Email vérifié avec succès ! Merci ' + (data.email || '')); }
+    else{ toast2('⚠️ ' + (data.error || 'Lien de vérification invalide')); }
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+  window.history.replaceState({}, '', window.location.pathname);
+  await checkSession();
+}
+
 checkSession();
+traiterLienVerification();
 let basePkgNom = 'Petit colis';
 let commandeActuelleId = null;
 
