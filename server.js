@@ -7,7 +7,6 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 
 const DB_FILE = path.join(__dirname, 'db.json');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
@@ -21,20 +20,32 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 // Render (Settings > Environment) — jamais écrits en dur ici.
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
-const EMAIL_ACTIF = !!(GMAIL_USER && GMAIL_APP_PASSWORD);
-
-const mailer = EMAIL_ACTIF ? nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
-}) : null;
-
+const EMAIL_ACTIF = !!(GMAIL_USER && process.env.BREVO_API_KEY);
 async function envoyerEmail(to, subject, html) {
   if (!EMAIL_ACTIF) {
-    console.log('⚠️ Envoi d’email ignoré (GMAIL_USER / GMAIL_APP_PASSWORD non configurés). Destinataire: ' + to);
+    console.log('⚠️ Envoi d\'email ignoré (BREVO_API_KEY non configurée). Destinataire: ' + to);
     return false;
   }
   try {
-    await mailer.sendMail({ from: '"MTK Livraison" <' + GMAIL_USER + '>', to, subject, html });
+    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'MTK Livraison', email: GMAIL_USER },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html
+      })
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      console.log('❌ Erreur envoi email:', r.status, err);
+      return false;
+    }
     return true;
   } catch (e) {
     console.log('❌ Erreur envoi email:', e.message);
