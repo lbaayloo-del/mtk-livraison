@@ -1172,8 +1172,7 @@ async function renvoyerVerification(){
 function afficherBandeauVerif(){
   const b1 = document.getElementById('verif-banner');
   const b2 = document.getElementById('verif-banner-livreur');
-  const nonVerifie = currentUser && currentUser.emailVerifie === false;
-  if(b1) b1.style.display = nonVerifie ? 'flex' : 'none';
+const nonVerifie = false; // bandeau désactivé  if(b1) b1.style.display = nonVerifie ? 'flex' : 'none';
   if(b2) b2.style.display = nonVerifie ? 'flex' : 'none';
 }
 
