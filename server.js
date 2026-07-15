@@ -1,16 +1,35 @@
-// test persistance// MTK Livraison — serveur backend (Express + MongoDB Atlas comme base de données)
+// MTK Livraison — serveur backend (Express + MongoDB Atlas comme base de données)
 // -----------------------------------------------------------------------------
 const express = require('express');
 const session = require('express-session');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
+const cloudinary = require('cloudinary').v2;
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// ---------- stockage des images (Cloudinary) ----------
+// Les photos de profil et permis sont envoyées vers Cloudinary plutôt que sur le disque
+// de Render, qui est effacé à chaque redéploiement.
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+function uploaderVersCloudinary(buffer, dossier) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: dossier, resource_type: 'image' },
+      (err, result) => {
+        if (err) return reject(err);
+        resolve(result.secure_url);
+      }
+    );
+    stream.end(buffer);
+  });
+}
 
 const ADMIN_EMAIL = 'admin@mtklivraison.sn';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
@@ -108,12 +127,10 @@ function publicUser(u) {
 }
 
 // ---------- upload de fichiers (photo de profil / permis) ----------
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => cb(null, crypto.randomUUID() + path.extname(file.originalname || '').slice(0, 10))
-});
+// Les fichiers sont gardés en mémoire (buffer) le temps de l'envoi vers Cloudinary,
+// jamais écrits sur le disque de Render.
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 Mo max par fichier
   fileFilter: (req, file, cb) => {
     if (!file.mimetype.startsWith('image/')) return cb(new Error('Seules les images sont acceptées'));
@@ -125,7 +142,6 @@ const upload = multer({
 const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
-app.use('/uploads', express.static(UPLOAD_DIR));
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'mtk-livraison-changez-ce-secret-en-production',
@@ -173,8 +189,19 @@ app.post('/api/register', (req, res, next) => {
     return res.status(400).json({ error: 'La photo de la pièce d’identité / permis est obligatoire pour les livreurs' });
   }
 
-  const photo = req.files && req.files.photo ? '/uploads/' + req.files.photo[0].filename : '';
-  const permis = req.files && req.files.permis ? '/uploads/' + req.files.permis[0].filename : '';
+  let photo = '';
+  let permis = '';
+  try {
+    if (req.files && req.files.photo) {
+      photo = await uploaderVersCloudinary(req.files.photo[0].buffer, 'mtk-livraison/profils');
+    }
+    if (req.files && req.files.permis) {
+      permis = await uploaderVersCloudinary(req.files.permis[0].buffer, 'mtk-livraison/permis');
+    }
+  } catch (e) {
+    console.log('❌ Erreur upload Cloudinary:', e.message);
+    return res.status(500).json({ error: 'Échec de l’envoi des images, réessayez' });
+  }
   const tokenVerification = crypto.randomBytes(24).toString('hex');
 
   const user = {
@@ -600,4 +627,3 @@ async function demarrer() {
   }
 }
 demarrer();
-// test
