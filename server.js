@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 const crypto = require('crypto');
 const { MongoClient } = require('mongodb');
+const MongoStore = require('connect-mongo');
 const cloudinary = require('cloudinary').v2;
 
 // ---------- stockage des images (Cloudinary) ----------
@@ -145,6 +146,11 @@ app.use(express.json());
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'mtk-livraison-changez-ce-secret-en-production',
+  store: MongoStore.create({
+    mongoUrl: MONGODB_URI,
+    collectionName: 'sessions',
+    ttl: 60 * 60 * 24 * 7 // 7 jours, doit correspondre au cookie maxAge ci-dessous
+  }),
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -296,6 +302,57 @@ app.post('/api/login', async (req, res) => {
 
 app.post('/api/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
+});
+
+// ---------- Mot de passe oublié ----------
+app.post('/api/mot-de-passe-oublie', async (req, res) => {
+  const { email } = req.body || {};
+  const db = await loadDB();
+  const user = db.users.find(u => u.email === String(email || '').trim().toLowerCase());
+  // On répond toujours "ok" même si l'email n'existe pas, pour ne pas révéler
+  // quels emails sont inscrits (bonne pratique de sécurité classique).
+  if (!user) return res.json({ ok: true });
+
+  const tokenReset = crypto.randomBytes(24).toString('hex');
+  user.tokenResetPassword = tokenReset;
+  user.tokenResetExpire = Date.now() + 1000 * 60 * 60; // valable 1 heure
+  await saveDB(db);
+
+  if (EMAIL_ACTIF) {
+    const lienReset = req.protocol + '://' + req.get('host') + '/?reset=' + tokenReset;
+    await envoyerEmail(
+      user.email,
+      'Réinitialisation de votre mot de passe — MTK Livraison',
+      `<div style="font-family:sans-serif;max-width:480px;margin:auto">
+        <h2 style="color:#FF6B00">MTK Livraison</h2>
+        <p>Bonjour ${user.prenom},</p>
+        <p>Vous avez demandé à réinitialiser votre mot de passe. Ce lien est valable 1 heure :</p>
+        <p style="text-align:center;margin:28px 0">
+          <a href="${lienReset}" style="background:#FF6B00;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:bold">Réinitialiser mon mot de passe</a>
+        </p>
+        <p style="font-size:12px;color:#888">Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.</p>
+      </div>`
+    );
+  }
+  res.json({ ok: true });
+});
+
+app.post('/api/reinitialiser-mot-de-passe', async (req, res) => {
+  const { token, password } = req.body || {};
+  if (!token || !password) return res.status(400).json({ error: 'Requête invalide' });
+  if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+    return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères, avec au moins une lettre et un chiffre' });
+  }
+  const db = await loadDB();
+  const user = db.users.find(u => u.tokenResetPassword === token);
+  if (!user || !user.tokenResetExpire || user.tokenResetExpire < Date.now()) {
+    return res.status(400).json({ error: 'Lien de réinitialisation invalide ou expiré' });
+  }
+  user.password = bcrypt.hashSync(password, 10);
+  user.tokenResetPassword = null;
+  user.tokenResetExpire = null;
+  await saveDB(db);
+  res.json({ ok: true });
 });
 
 app.get('/api/me', async (req, res) => {
