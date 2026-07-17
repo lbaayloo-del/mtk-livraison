@@ -1192,4 +1192,449 @@ async function renderClientDashboard(){
     const commandes = data.commandes || [];
     const enCours = commandes.filter(c => ['en_attente','acceptee','en_route'].includes(c.statut));
     const terminees = commandes.filter(c => c.statut === 'livree');
-    const totalDepense = terminees.reduce((sum
+    const totalDepense = terminees.reduce((sum, c) => sum + (c.prix || 0), 0);
+
+    document.getElementById('kpi-total').textContent = commandes.length;
+    document.getElementById('kpi-encours').textContent = enCours.length;
+    document.getElementById('kpi-terminees').textContent = terminees.length;
+    document.getElementById('kpi-depense').textContent = totalDepense.toLocaleString('fr-FR');
+    document.getElementById('db-souscount').textContent = enCours.length
+      ? 'Vous avez ' + enCours.length + ' commande(s) en cours en ce moment'
+      : 'Aucune commande en cours pour le moment';
+
+    const labelStatut = { en_attente: ['En attente','bs-ec'], acceptee: ['Acceptée','bs-ec'], en_route: ['En route','bs-ec'], livree: ['Terminée','bs-ok'], annulee: ['Annulée','bs-ec'] };
+    const tbody = document.getElementById('dsb-commandes-tbody');
+    const dernieres = commandes.slice(0, 5);
+    tbody.innerHTML = dernieres.length ? dernieres.map(c => {
+      const [libelle, classe] = labelStatut[c.statut] || [c.statut, 'bs-ec'];
+      return `<div class="tbl-r"><span class="tid">#${c.id.slice(-6).toUpperCase()}</span><span>${c.livreur ? c.livreur.prenom + ' ' + c.livreur.nom : '—'}</span><span><span class="bs ${classe}">${libelle}</span></span><span>${c.prix ? c.prix.toLocaleString('fr-FR') + ' F' : (c.prixSuggere.toLocaleString('fr-FR') + ' F (suggéré)')}</span><span>${c.dateCreationAffichage.split(' ')[0]}</span></div>`;
+    }).join('') : '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Aucune commande pour le moment — <a href="#" onclick="gp(\'commander\',null);return false" style="color:var(--or);font-weight:700">passez votre première commande</a></div>';
+  }catch(e){
+    document.getElementById('db-souscount').textContent = 'Impossible de charger vos commandes';
+  }
+}
+
+function renderLivreurEspace(){
+  if(!currentUser) return;
+  afficherBandeauVerif();
+  document.getElementById('ll-name').textContent = currentUser.prenom + ' ' + currentUser.nom;
+  document.getElementById('ll-email').textContent = currentUser.email;
+  document.getElementById('ll-tel').textContent = currentUser.telephone || '—';
+  document.getElementById('ll-vehicule').textContent = currentUser.vehicule || '—';
+  document.getElementById('ll-zone').textContent = currentUser.zone || '—';
+  document.getElementById('ll-permis-status').textContent = currentUser.permis ? '✅ Reçue' : '❌ Non fournie';
+  const img = document.getElementById('ll-photo');
+  const fallback = document.getElementById('ll-photo-fallback');
+  if(currentUser.photo){ img.src = currentUser.photo; img.style.display = 'block'; fallback.style.display = 'none'; }
+  else { img.style.display = 'none'; fallback.style.display = 'flex'; }
+
+  const titre = document.getElementById('ll-statut-titre');
+  const texte = document.getElementById('ll-statut-texte');
+  if(currentUser.statut === 'approuve'){
+    titre.textContent = '✅ Compte approuvé';
+    titre.style.color = 'var(--gr)';
+    texte.textContent = 'Votre dossier a été validé par l’équipe MTK Livraison. Vous pouvez commencer à effectuer des livraisons.';
+  } else if(currentUser.statut === 'refuse'){
+    titre.textContent = '❌ Dossier refusé';
+    titre.style.color = '#d33';
+    texte.textContent = 'Votre dossier n’a pas été validé. Contactez le support MTK Livraison pour plus d’informations ou pour soumettre un nouveau document.';
+  } else {
+    titre.textContent = 'En cours de vérification';
+    titre.style.color = '';
+    texte.textContent = 'Votre dossier a bien été enregistré sur MTK Livraison. Notre équipe vérifie votre pièce d’identité avant l’activation complète de votre compte livreur — vous serez contacté(e) sous 24h.';
+  }
+}
+
+function statutBadge(statut){
+  if(statut === 'approuve') return '<span class="bs bs-ok">✅ Approuvé</span>';
+  if(statut === 'refuse') return '<span class="bs" style="background:#fde3e3;color:#c0392b">❌ Refusé</span>';
+  return '<span class="bs bs-ec">⏳ En attente</span>';
+}
+
+async function renderAdmin(){
+  try{
+    const res = await fetch('/api/admin/users', { credentials: 'same-origin' });
+    if(!res.ok){ toast2('⛔ Accès réservé'); gp('accueil', null); return; }
+    const data = await res.json();
+    const users = data.users;
+    document.getElementById('admin-k-total').textContent = users.length;
+    document.getElementById('admin-k-clients').textContent = users.filter(u => u.role === 'client').length;
+    document.getElementById('admin-k-livreurs').textContent = users.filter(u => u.role === 'livreur').length;
+    const tbody = document.getElementById('admin-tbody');
+    const rows = users.map(u => `
+      <div class="tbl-r" style="grid-template-columns:0.6fr 1.2fr 1.1fr 0.7fr 0.8fr 0.8fr 0.9fr 1.1fr">
+        <span>${u.photo ? `<img src="${u.photo}" style="width:34px;height:34px;border-radius:50%;object-fit:cover">` : '<div style="width:34px;height:34px;border-radius:50%;background:#eee"></div>'}</span>
+        <span>${u.prenom} ${u.nom}</span>
+        <span>${u.email}<br><span style="color:#aaa">${u.telephone || ''}</span></span>
+        <span><span class="bs ${u.role === 'livreur' ? 'bs-ec' : 'bs-ok'}" style="text-transform:capitalize">${u.role}</span></span>
+        <span>${u.dateInscription || ''}</span>
+        <span>${u.permis ? `<a href="${u.permis}" target="_blank" style="color:var(--or);font-weight:700;text-decoration:none">📎 Voir</a>` : '—'}</span>
+        <span>${u.role === 'livreur' ? statutBadge(u.statut) : ''}</span>
+        <span style="display:flex;gap:4px;flex-wrap:wrap">
+          ${u.role === 'livreur' && u.statut !== 'approuve' ? `<button class="btn-sm-o" style="color:var(--gr);border-color:var(--gr)" onclick="changerStatut('${u.id}','approuve')">✅</button>` : ''}
+          ${u.role === 'livreur' && u.statut !== 'refuse' ? `<button class="btn-sm-o" style="color:#c0392b;border-color:#c0392b" onclick="changerStatut('${u.id}','refuse')">❌</button>` : ''}
+          ${u.role !== 'admin' ? `<button class="btn-sm-o" onclick="deleteUser('${u.id}')">Suppr.</button>` : ''}
+        </span>
+      </div>`).join('');
+    tbody.innerHTML = rows || '<div style="padding:24px;text-align:center;color:#aaa;font-size:12px">Aucun utilisateur inscrit pour le moment</div>';
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+async function changerStatut(id, statut){
+  try{
+    const res = await fetch('/api/admin/users/' + id + '/statut', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ statut })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Action impossible')); return; }
+    renderAdmin();
+    toast2(statut === 'approuve' ? '✅ Livreur approuvé' : '❌ Livreur refusé');
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+async function deleteUser(id){
+  try{
+    const res = await fetch('/api/admin/users/' + id, { method: 'DELETE', credentials: 'same-origin' });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Suppression impossible')); return; }
+    renderAdmin();
+    toast2('🗑️ Utilisateur supprimé');
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+/* ================= NAVIGATION ================= */
+function gp(id, el) {
+  if(id === 'dashboard' && !requireAuth()) return;
+  if(id === 'offres' && !requireAuth()) return;
+  if(id === 'suivi' && !requireAuth()) return;
+  if(id === 'admin' && !requireAuth('admin')) return;
+  if(id === 'livreur-espace' && !requireAuth('livreur')) return;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('act'));
+  document.getElementById('pg-' + id).classList.add('act');
+  document.querySelectorAll('.hn').forEach(b => b.classList.remove('act'));
+  if (el && el.classList) el.classList.add('act');
+  if(id === 'admin') renderAdmin();
+  if(id === 'dashboard') renderClientDashboard();
+  if(id === 'livreur-espace'){ renderLivreurEspace(); loadCoursesLivreur(); loadDemandesDisponibles(); }
+  if(id === 'offres') loadOffres();
+  if(id === 'suivi') loadSuivi();
+  window.scrollTo(0, 0);
+}
+
+async function traiterLienVerification(){
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('verifier');
+  if(!token) return;
+  try{
+    const res = await fetch('/api/verifier-email/' + token);
+    const data = await res.json();
+    if(res.ok){ toast2('✅ Email vérifié avec succès ! Merci ' + (data.email || '')); }
+    else{ toast2('⚠️ ' + (data.error || 'Lien de vérification invalide')); }
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+  window.history.replaceState({}, '', window.location.pathname);
+  await checkSession();
+}
+
+function ouvrirMotDePasseOublie(){
+  const email = prompt('Entrez votre adresse email pour recevoir un lien de réinitialisation :');
+  if(!email) return;
+  demanderResetMotDePasse(email.trim());
+}
+async function demanderResetMotDePasse(email){
+  try{
+    const res = await fetch('/api/mot-de-passe-oublie', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ email })
+    });
+    await res.json();
+    toast2('✅ Si un compte existe avec cet email, un lien vous a été envoyé.');
+  }catch(e){
+    toast2('❌ Impossible de contacter le serveur');
+  }
+}
+async function verifierLienReset(){
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('reset');
+  if(!token) return;
+  const nouveauMdp = prompt('Entrez votre nouveau mot de passe (8 caractères min, avec au moins une lettre et un chiffre) :');
+  if(!nouveauMdp) return;
+  try{
+    const res = await fetch('/api/reinitialiser-mot-de-passe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ token, password: nouveauMdp })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('❌ ' + (data.error || 'Lien invalide ou expiré')); return; }
+    toast2('✅ Mot de passe changé avec succès ! Connectez-vous.');
+  }catch(e){
+    toast2('❌ Impossible de contacter le serveur');
+  }
+}
+
+checkSession();
+traiterLienVerification();
+verifierLienReset();
+let basePkgNom = 'Petit colis';
+let commandeActuelleId = null;
+
+function selPkg(el, price, nom) {
+  document.querySelectorAll('.pkg').forEach(p => p.classList.remove('sel'));
+  el.classList.add('sel'); basePkg = price; basePkgNom = nom || 'Colis'; calcPrix();
+}
+function calcPrix() {
+  const distEl = document.getElementById('cmd-distance');
+  const dist = distEl ? (Number(distEl.value) || 0) : 0;
+  const fraisDistance = Math.round(dist * 150);
+  document.getElementById('base-p').textContent = basePkg.toLocaleString('fr-FR') + ' FCFA';
+  document.getElementById('dist-p').textContent = dist > 0 ? fraisDistance.toLocaleString('fr-FR') + ' FCFA (' + dist + ' km)' : '—';
+  document.getElementById('total-p').textContent = (basePkg + fraisDistance).toLocaleString('fr-FR') + ' FCFA';
+}
+
+async function soumettreCommande(){
+  if(!requireAuth('client')){ toast2('🔒 Connectez-vous en tant que client pour commander'); return; }
+  const depart = document.getElementById('cmd-depart').value.trim();
+  const arrivee = document.getElementById('cmd-arrivee').value.trim();
+  const distanceKm = document.getElementById('cmd-distance').value;
+  const telephone = document.getElementById('f-phone').value.trim();
+  if(!depart || !arrivee || !telephone){ toast2('⚠️ Merci de remplir le départ, l’arrivée et le téléphone'); return; }
+
+  const body = {
+    depart, arrivee,
+    typeColis: basePkgNom,
+    prixBase: basePkg,
+    distanceKm,
+    poids: document.getElementById('cmd-poids').value,
+    description: document.getElementById('cmd-desc').value,
+    telephone,
+    paiement: document.getElementById('cmd-paiement').value
+  };
+  try{
+    const res = await fetch('/api/commandes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin', body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Erreur lors de la commande')); return; }
+    commandeActuelleId = data.commande.id;
+    toast2('✅ Commande créée ! Choisissez un livreur');
+    gp('offres', null);
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+async function loadOffres(){
+  const wrap = document.getElementById('offres-liste');
+  const sub = document.getElementById('offres-sub');
+  if(!commandeActuelleId){
+    wrap.innerHTML = '<div style="padding:30px;text-align:center;color:#888">Vous n’avez pas encore de commande en cours.<br><button class="btn-full" style="margin-top:14px;max-width:280px" onclick="gp(\'commander\',null)">Passer une commande →</button></div>';
+    sub.textContent = 'Aucune commande en cours';
+    return;
+  }
+  try{
+    const res = await fetch('/api/commandes/' + commandeActuelleId, { credentials: 'same-origin' });
+    if(!res.ok){ toast2('🔒 Connectez-vous pour voir les offres'); gp('connexion', null); return; }
+    const data = await res.json();
+    const c = data.commande;
+    const props = c.propositions || [];
+
+    if(c.statut !== 'en_attente'){
+      sub.textContent = 'Cette commande a déjà été attribuée';
+      wrap.innerHTML = '<div style="padding:30px;text-align:center;color:#888">Cette commande a déjà un livreur.<br><button class="btn-full" style="margin-top:14px;max-width:280px" onclick="gp(\'suivi\',null)">Voir le suivi →</button></div>';
+      return;
+    }
+
+    sub.textContent = props.length ? props.length + ' offre(s) reçue(s) — prix suggéré: ' + c.prixSuggere.toLocaleString('fr-FR') + ' FCFA' : 'En attente d’offres des livreurs — prix suggéré: ' + c.prixSuggere.toLocaleString('fr-FR') + ' FCFA';
+
+    if(!props.length){
+      wrap.innerHTML = '<div style="padding:30px;text-align:center;color:#888">Aucune offre reçue pour le moment. Les livreurs approuvés voient votre demande et peuvent proposer un prix à tout moment.<br><button class="btn-sm-o" style="margin-top:14px" onclick="loadOffres()">🔄 Rafraîchir</button></div>';
+      return;
+    }
+    wrap.innerHTML = props.sort((a,b) => a.prix - b.prix).map(p => `
+      <div class="lv-card">
+        ${p.livreur && p.livreur.photo ? `<img src="${p.livreur.photo}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">` : '<div class="lv-av">🧑🏿</div>'}
+        <div class="lv-body">
+          <div class="lv-name">${p.livreur ? p.livreur.prenom + ' ' + p.livreur.nom : 'Livreur'}</div>
+          <div class="lv-meta"><span>🏍️ ${p.livreur && p.livreur.vehicule || 'Véhicule non précisé'}</span><span>📍 ${p.livreur && p.livreur.zone || 'Zone non précisée'}</span></div>
+          ${p.message ? `<div style="font-size:12px;color:#999;margin-top:4px">💬 ${p.message}</div>` : ''}
+        </div>
+        <div class="lv-right">
+          <div class="lv-price">${p.prix.toLocaleString('fr-FR')} F</div>
+          <div class="lv-btns"><button class="btn-sm-f" onclick="choisirLivreur('${p.livreurId}')">Choisir</button></div>
+        </div>
+      </div>`).join('') + '<button class="btn-sm-o" style="margin-top:14px" onclick="loadOffres()">🔄 Rafraîchir les offres</button>';
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+async function choisirLivreur(livreurId){
+  if(!commandeActuelleId) return;
+  try{
+    const res = await fetch('/api/commandes/' + commandeActuelleId + '/choisir', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin', body: JSON.stringify({ livreurId })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Impossible de choisir ce livreur')); return; }
+    toast2('✅ Livreur choisi ! Suivez votre commande');
+    setTimeout(() => gp('suivi', null), 1000);
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+async function loadDemandesDisponibles(){
+  const zone = document.getElementById('ll-demandes');
+  if(!zone) return;
+  if(currentUser && currentUser.statut !== 'approuve'){
+    zone.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Votre compte doit être approuvé avant de proposer un prix sur une demande.</div>';
+    return;
+  }
+  try{
+    const res = await fetch('/api/commandes/disponibles', { credentials: 'same-origin' });
+    const data = await res.json();
+    const commandes = data.commandes || [];
+    if(!commandes.length){
+      zone.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Aucune demande en attente pour le moment.</div>';
+      return;
+    }
+    zone.innerHTML = commandes.map(c => `
+      <div class="sv-card" style="margin-bottom:14px">
+        <div class="sv-header">
+          <div class="sv-id">DEMANDE</div>
+          <div class="sv-num">#${c.id.slice(-6).toUpperCase()}</div>
+          <span class="sv-badge">${c.nbPropositions} offre(s) déjà envoyée(s)</span>
+        </div>
+        <div class="sv-field"><span class="sv-fl">Départ</span><span class="sv-fv">${c.depart}</span></div>
+        <div class="sv-field"><span class="sv-fl">Arrivée</span><span class="sv-fv">${c.arrivee}</span></div>
+        <div class="sv-field"><span class="sv-fl">Type</span><span class="sv-fv">📦 ${c.typeColis}</span></div>
+        <div class="sv-field"><span class="sv-fl">Distance</span><span class="sv-fv">${c.distanceKm} km ${c.distanceSource === 'auto' ? '(calculée)' : '(estimée)'}</span></div>
+        <div class="sv-field"><span class="sv-fl">Prix suggéré</span><span class="sv-fv">${c.prixSuggere.toLocaleString('fr-FR')} FCFA</span></div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <input type="number" min="1" placeholder="Votre prix (FCFA)" id="prix-${c.id}" value="${c.maProposition ? c.maProposition.prix : ''}" style="flex:1;padding:10px 12px;border:1px solid #e5e5e5;border-radius:8px;font-size:13px">
+          <button class="btn-sm-f" onclick="proposerPrix('${c.id}')">${c.maProposition ? 'Modifier mon offre' : 'Proposer'}</button>
+        </div>
+      </div>`).join('');
+  }catch(e){ zone.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Erreur de chargement</div>'; }
+}
+
+async function proposerPrix(commandeId){
+  const input = document.getElementById('prix-' + commandeId);
+  const prix = Number(input.value);
+  if(!prix || prix <= 0){ toast2('⚠️ Merci d’indiquer un prix valide'); return; }
+  try{
+    const res = await fetch('/api/commandes/' + commandeId + '/proposer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin', body: JSON.stringify({ prix })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Impossible d’envoyer votre offre')); return; }
+    toast2('✅ Offre envoyée au client');
+    loadDemandesDisponibles();
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+function libelleStatut(s){
+  return { en_attente:'🟡 En attente d’un livreur', acceptee:'🟢 Acceptée', en_route:'🔴 En route', livree:'✅ Livrée', annulee:'⚫ Annulée' }[s] || s;
+}
+
+async function loadSuivi(){
+  const zone = document.getElementById('suivi-contenu');
+  try{
+    const res = await fetch('/api/commandes/mes', { credentials: 'same-origin' });
+    if(!res.ok){ toast2('🔒 Connectez-vous pour voir vos commandes'); gp('connexion', null); return; }
+    const data = await res.json();
+    const commandes = data.commandes;
+    if(!commandes.length){
+      zone.innerHTML = '<div style="padding:30px;text-align:center;color:#888">Vous n’avez pas encore de commande.<br><button class="btn-full" style="margin-top:14px;max-width:280px" onclick="gp(\'commander\',null)">Passer une commande →</button></div>';
+      return;
+    }
+    zone.innerHTML = commandes.map(c => `
+      <div class="sv-card" style="margin-bottom:16px">
+        <div class="sv-header">
+          <div class="sv-id">N° COMMANDE</div>
+          <div class="sv-num">#${c.id.slice(-6).toUpperCase()}</div>
+          <span class="sv-badge">${libelleStatut(c.statut)}</span>
+        </div>
+        <div class="sv-field"><span class="sv-fl">Livreur</span><span class="sv-fv">${c.livreur ? c.livreur.prenom + ' ' + c.livreur.nom : 'Pas encore assigné'}</span></div>
+        ${c.livreur ? `<div class="sv-field"><span class="sv-fl">Téléphone livreur</span><span class="sv-fv">${c.livreur.telephone || '—'}</span></div>` : ''}
+        <div class="sv-field"><span class="sv-fl">Départ</span><span class="sv-fv">${c.depart}</span></div>
+        <div class="sv-field"><span class="sv-fl">Arrivée</span><span class="sv-fv">${c.arrivee}</span></div>
+        <div class="sv-field"><span class="sv-fl">Type</span><span class="sv-fv">📦 ${c.typeColis}</span></div>
+        <div class="sv-field"><span class="sv-fl">Date</span><span class="sv-fv">${c.dateCreationAffichage}</span></div>
+        <div class="sv-prix">${c.prix ? c.prix.toLocaleString('fr-FR') + ' FCFA' : c.prixSuggere.toLocaleString('fr-FR') + ' FCFA (suggéré)'}</div>
+        ${c.statut === 'en_attente' ? `<button class="btn-full" style="grid-column:unset" onclick="commandeActuelleId='${c.id}';gp('offres',null)">Choisir un livreur</button>` : ''}
+        ${(c.statut === 'en_attente' || c.statut === 'acceptee') ? `<button class="btn-sm-o" style="margin-top:8px" onclick="annulerCommande('${c.id}')">Annuler la commande</button>` : ''}
+      </div>`).join('');
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+async function annulerCommande(id){
+  try{
+    const res = await fetch('/api/commandes/' + id + '/statut', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin', body: JSON.stringify({ statut: 'annulee' })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Impossible d’annuler')); return; }
+    toast2('🚫 Commande annulée');
+    loadSuivi();
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+async function loadCoursesLivreur(){
+  const zone = document.getElementById('ll-courses');
+  if(!zone) return;
+  if(currentUser && currentUser.statut !== 'approuve'){
+    zone.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Votre compte doit être approuvé avant de recevoir des courses.</div>';
+    return;
+  }
+  try{
+    const res = await fetch('/api/commandes/livreur', { credentials: 'same-origin' });
+    const data = await res.json();
+    const commandes = data.commandes || [];
+    if(!commandes.length){
+      zone.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Aucune course pour le moment.</div>';
+      return;
+    }
+    zone.innerHTML = commandes.map(c => `
+      <div class="sv-card" style="margin-bottom:14px">
+        <div class="sv-header">
+          <div class="sv-id">N° COMMANDE</div>
+          <div class="sv-num">#${c.id.slice(-6).toUpperCase()}</div>
+          <span class="sv-badge">${libelleStatut(c.statut)}</span>
+        </div>
+        <div class="sv-field"><span class="sv-fl">Client</span><span class="sv-fv">${c.client ? c.client.prenom + ' ' + c.client.nom : '—'}</span></div>
+        <div class="sv-field"><span class="sv-fl">Téléphone client</span><span class="sv-fv">${c.client ? c.client.telephone : '—'}</span></div>
+        <div class="sv-field"><span class="sv-fl">Départ</span><span class="sv-fv">${c.depart}</span></div>
+        <div class="sv-field"><span class="sv-fl">Arrivée</span><span class="sv-fv">${c.arrivee}</span></div>
+        <div class="sv-prix">${c.prix.toLocaleString('fr-FR')} FCFA</div>
+        ${c.statut === 'acceptee' ? `<button class="btn-full" style="grid-column:unset" onclick="majStatutCommande('${c.id}','en_route')">🛵 Marquer en route</button>` : ''}
+        ${c.statut === 'en_route' ? `<button class="btn-full" style="grid-column:unset" onclick="majStatutCommande('${c.id}','livree')">✅ Marquer comme livrée</button>` : ''}
+      </div>`).join('');
+  }catch(e){ zone.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Erreur de chargement</div>'; }
+}
+
+async function majStatutCommande(id, statut){
+  try{
+    const res = await fetch('/api/commandes/' + id + '/statut', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin', body: JSON.stringify({ statut })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Action impossible')); return; }
+    toast2(statut === 'en_route' ? '🛵 Course marquée en route' : '✅ Course marquée comme livrée');
+    loadCoursesLivreur();
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+function toast2(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+</script>
+</body>
+</html>
