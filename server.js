@@ -643,6 +643,23 @@ app.patch('/api/commandes/:id/statut', requireLogin, async (req, res) => {
   res.json({ commande: enrichirCommande(db, commande, 'client') });
 });
 
+// Le livreur envoie sa position GPS pendant une course "en_route" (toutes les 10-15s côté frontend)
+app.post('/api/commandes/:id/position', requireLogin, async (req, res) => {
+  const { lat, lon } = req.body || {};
+  const latNum = Number(lat), lonNum = Number(lon);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lonNum)) return res.status(400).json({ error: 'Coordonnées GPS invalides' });
+
+  const db = await loadDB();
+  const commande = (db.commandes || []).find(c => c.id === req.params.id);
+  if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
+  if (commande.livreurId !== req.currentUser.id) return res.status(403).json({ error: 'Seul le livreur assigné peut envoyer sa position' });
+  if (commande.statut !== 'en_route') return res.status(400).json({ error: 'La position n’est suivie que pendant une livraison en route' });
+
+  commande.positionLivreur = { lat: latNum, lon: lonNum, majLe: new Date().toISOString() };
+  await saveDB(db);
+  res.json({ ok: true });
+});
+
 // Le client note le livreur après une livraison terminée (une seule fois par commande)
 app.post('/api/commandes/:id/noter', requireLogin, async (req, res) => {
   const { note, commentaire } = req.body || {};
