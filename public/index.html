@@ -1306,6 +1306,23 @@ async function deleteUser(id){
 }
 
 /* ================= NAVIGATION ================= */
+// ================= AUTO-RAFRAÎCHISSEMENT (notifications quasi temps réel) =================
+// Sur les pages où l'information change souvent (offres, suivi, espace livreur), on relance
+// discrètement le chargement toutes les 15 secondes, sans interrompre l'utilisateur.
+let intervalleAutoRefresh = null;
+function arreterAutoRefresh(){
+  if(intervalleAutoRefresh){ clearInterval(intervalleAutoRefresh); intervalleAutoRefresh = null; }
+}
+function demarrerAutoRefresh(fonctions){
+  arreterAutoRefresh();
+  intervalleAutoRefresh = setInterval(() => {
+    if(document.hidden) return; // ne rafraîchit pas un onglet inactif, pour économiser des requêtes
+    const actif = document.activeElement;
+    if(actif && (actif.tagName === 'INPUT' || actif.tagName === 'TEXTAREA')) return; // évite d'interrompre une saisie en cours
+    fonctions.forEach(fn => fn());
+  }, 15000);
+}
+
 function gp(id, el) {
   if(id === 'dashboard' && !requireAuth()) return;
   if(id === 'offres' && !requireAuth()) return;
@@ -1316,11 +1333,15 @@ function gp(id, el) {
   document.getElementById('pg-' + id).classList.add('act');
   document.querySelectorAll('.hn').forEach(b => b.classList.remove('act'));
   if (el && el.classList) el.classList.add('act');
+  arreterAutoRefresh();
   if(id === 'admin') renderAdmin();
   if(id === 'dashboard') renderClientDashboard();
-  if(id === 'livreur-espace'){ renderLivreurEspace(); loadCoursesLivreur(); loadDemandesDisponibles(); }
-  if(id === 'offres') loadOffres();
-  if(id === 'suivi') loadSuivi();
+  if(id === 'livreur-espace'){
+    renderLivreurEspace(); loadCoursesLivreur(); loadDemandesDisponibles();
+    demarrerAutoRefresh([loadCoursesLivreur, loadDemandesDisponibles]);
+  }
+  if(id === 'offres'){ loadOffres(); demarrerAutoRefresh([loadOffres]); }
+  if(id === 'suivi'){ loadSuivi(); demarrerAutoRefresh([loadSuivi]); }
   window.scrollTo(0, 0);
 }
 
