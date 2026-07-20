@@ -123,8 +123,21 @@ async function seedAdmin() {
 }
 
 function publicUser(u) {
-  const { password, tokenVerification, ...rest } = u;
+  const { password, tokenVerification, tokenResetPassword, tokenResetExpire, ...rest } = u;
+  if (u.role === 'livreur') {
+    const { moyenne, nombre } = noteMoyenneLivreur(u);
+    rest.noteMoyenne = moyenne;
+    rest.nombreAvis = nombre;
+  }
   return rest;
+}
+
+// Calcule la note moyenne d'un livreur à partir des avis reçus (stockés dans u.avis)
+function noteMoyenneLivreur(livreur) {
+  const avis = livreur && livreur.avis ? livreur.avis : [];
+  if (!avis.length) return { moyenne: null, nombre: 0 };
+  const somme = avis.reduce((s, a) => s + a.note, 0);
+  return { moyenne: Math.round((somme / avis.length) * 10) / 10, nombre: avis.length };
 }
 
 // ---------- upload de fichiers (photo de profil / permis) ----------
@@ -382,7 +395,7 @@ app.get('/api/livreurs/disponibles', requireLogin, async (req, res) => {
   const db = await loadDB();
   const livreurs = db.users
     .filter(u => u.role === 'livreur' && u.statut === 'approuve')
-    .map(u => ({ id: u.id, prenom: u.prenom, nom: u.nom, photo: u.photo, vehicule: u.vehicule, zone: u.zone }));
+    .map(u => ({ id: u.id, prenom: u.prenom, nom: u.nom, photo: u.photo, vehicule: u.vehicule, zone: u.zone, ...noteMoyenneLivreur(u) }));
   res.json({ livreurs });
 });
 
@@ -537,14 +550,14 @@ function enrichirCommande(db, c, vue, livreurIdCourant) {
 
   const base = {
     ...c,
-    livreur: livreur ? { id: livreur.id, prenom: livreur.prenom, nom: livreur.nom, photo: livreur.photo, telephone: livreur.telephone, vehicule: livreur.vehicule } : null
+    livreur: livreur ? { id: livreur.id, prenom: livreur.prenom, nom: livreur.nom, photo: livreur.photo, telephone: livreur.telephone, vehicule: livreur.vehicule, ...noteMoyenneLivreur(livreur) } : null
   };
 
   if (vue === 'client') {
     base.client = client ? { prenom: client.prenom, nom: client.nom, telephone: client.telephone } : null;
     base.propositions = (c.propositions || []).map(p => {
       const l = db.users.find(u => u.id === p.livreurId);
-      return { ...p, livreur: l ? { id: l.id, prenom: l.prenom, nom: l.nom, photo: l.photo, vehicule: l.vehicule, zone: l.zone } : null };
+      return { ...p, livreur: l ? { id: l.id, prenom: l.prenom, nom: l.nom, photo: l.photo, vehicule: l.vehicule, zone: l.zone, ...noteMoyenneLivreur(l) } : null };
     });
   } else {
     // vue livreur : coordonnées client cachées tant que la course ne lui est pas attribuée
@@ -628,6 +641,33 @@ app.patch('/api/commandes/:id/statut', requireLogin, async (req, res) => {
   commande.statut = statut;
   await saveDB(db);
   res.json({ commande: enrichirCommande(db, commande, 'client') });
+});
+
+// Le client note le livreur après une livraison terminée (une seule fois par commande)
+app.post('/api/commandes/:id/noter', requireLogin, async (req, res) => {
+  const { note, commentaire } = req.body || {};
+  const noteNum = Number(note);
+  if (!noteNum || noteNum < 1 || noteNum > 5) return res.status(400).json({ error: 'La note doit être comprise entre 1 et 5' });
+
+  const db = await loadDB();
+  const commande = (db.commandes || []).find(c => c.id === req.params.id);
+  if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
+  if (commande.clientId !== req.currentUser.id) return res.status(403).json({ error: 'Cette commande ne vous appartient pas' });
+  if (commande.statut !== 'livree') return res.status(400).json({ error: 'Seules les commandes livrées peuvent être notées' });
+  if (commande.noteDonnee) return res.status(400).json({ error: 'Vous avez déjà noté cette commande' });
+
+  const livreur = db.users.find(u => u.id === commande.livreurId);
+  if (!livreur) return res.status(400).json({ error: 'Livreur introuvable' });
+  if (!livreur.avis) livreur.avis = [];
+  livreur.avis.push({
+    commandeId: commande.id,
+    note: noteNum,
+    commentaire: String(commentaire || '').trim().slice(0, 300),
+    date: new Date().toISOString()
+  });
+  commande.noteDonnee = true;
+  await saveDB(db);
+  res.json({ ok: true });
 });
 
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
