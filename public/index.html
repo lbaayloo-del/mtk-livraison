@@ -1561,6 +1561,14 @@ function libelleStatut(s){
   return { en_attente:'🟡 En attente d’un livreur', acceptee:'🟢 Acceptée', en_route:'🔴 En route', livree:'✅ Livrée', annulee:'⚫ Annulée' }[s] || s;
 }
 
+function texteDepuis(dateIso){
+  const secondes = Math.max(0, Math.floor((Date.now() - new Date(dateIso).getTime()) / 1000));
+  if(secondes < 60) return 'il y a ' + secondes + 's';
+  const minutes = Math.floor(secondes / 60);
+  if(minutes < 60) return 'il y a ' + minutes + ' min';
+  return 'il y a ' + Math.floor(minutes / 60) + 'h';
+}
+
 async function loadSuivi(){
   const zone = document.getElementById('suivi-contenu');
   try{
@@ -1586,6 +1594,8 @@ async function loadSuivi(){
         <div class="sv-field"><span class="sv-fl">Type</span><span class="sv-fv">📦 ${c.typeColis}</span></div>
         <div class="sv-field"><span class="sv-fl">Date</span><span class="sv-fv">${c.dateCreationAffichage}</span></div>
         <div class="sv-prix">${c.prix ? c.prix.toLocaleString('fr-FR') + ' FCFA' : c.prixSuggere.toLocaleString('fr-FR') + ' FCFA (suggéré)'}</div>
+        ${c.statut === 'en_route' && c.positionLivreur ? `<a href="https://www.google.com/maps?q=${c.positionLivreur.lat},${c.positionLivreur.lon}" target="_blank" class="btn-full" style="grid-column:unset;text-decoration:none">📍 Voir la position du livreur (${texteDepuis(c.positionLivreur.majLe)})</a>` : ''}
+        ${c.statut === 'en_route' && !c.positionLivreur ? `<p style="text-align:center;color:#aaa;font-size:12px">📡 En attente de la position GPS du livreur...</p>` : ''}
         ${c.statut === 'en_attente' ? `<button class="btn-full" style="grid-column:unset" onclick="commandeActuelleId='${c.id}';gp('offres',null)">Choisir un livreur</button>` : ''}
         ${(c.statut === 'en_attente' || c.statut === 'acceptee') ? `<button class="btn-sm-o" style="margin-top:8px" onclick="annulerCommande('${c.id}')">Annuler la commande</button>` : ''}
         ${c.statut === 'livree' && !c.noteDonnee ? `<button class="btn-full" style="grid-column:unset;margin-top:8px" onclick="ouvrirNotation('${c.id}')">⭐ Noter ce livreur</button>` : ''}
@@ -1657,9 +1667,35 @@ async function loadCoursesLivreur(){
         <div class="sv-field"><span class="sv-fl">Arrivée</span><span class="sv-fv">${c.arrivee}</span></div>
         <div class="sv-prix">${c.prix.toLocaleString('fr-FR')} FCFA</div>
         ${c.statut === 'acceptee' ? `<button class="btn-full" style="grid-column:unset" onclick="majStatutCommande('${c.id}','en_route')">🛵 Marquer en route</button>` : ''}
-        ${c.statut === 'en_route' ? `<button class="btn-full" style="grid-column:unset" onclick="majStatutCommande('${c.id}','livree')">✅ Marquer comme livrée</button>` : ''}
+        ${c.statut === 'en_route' ? `<p style="text-align:center;color:var(--gr);font-size:12px;margin:6px 0">📡 Partage de votre position GPS actif</p><button class="btn-full" style="grid-column:unset" onclick="majStatutCommande('${c.id}','livree')">✅ Marquer comme livrée</button>` : ''}
       </div>`).join('');
+
+    // Si une course est déjà "en_route" (ex: après un rechargement de page), on reprend le partage GPS
+    const courseEnRoute = commandes.find(c => c.statut === 'en_route');
+    if(courseEnRoute) demarrerPartagePosition(courseEnRoute.id);
+    else arreterPartagePosition();
   }catch(e){ zone.innerHTML = '<div style="padding:20px;text-align:center;color:#aaa;font-size:13px">Erreur de chargement</div>'; }
+}
+
+// ================= Partage de position GPS (livreur en route) =================
+let watchIdGPS = null;
+function demarrerPartagePosition(commandeId){
+  arreterPartagePosition();
+  if(!navigator.geolocation){ toast2('⚠️ La géolocalisation n’est pas disponible sur cet appareil'); return; }
+  watchIdGPS = navigator.geolocation.watchPosition(
+    (pos) => {
+      fetch('/api/commandes/' + commandeId + '/position', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude })
+      }).catch(() => {});
+    },
+    (err) => { toast2('⚠️ Impossible d’accéder à votre position GPS'); },
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+  );
+}
+function arreterPartagePosition(){
+  if(watchIdGPS !== null){ navigator.geolocation.clearWatch(watchIdGPS); watchIdGPS = null; }
 }
 
 async function majStatutCommande(id, statut){
@@ -1670,7 +1706,13 @@ async function majStatutCommande(id, statut){
     });
     const data = await res.json();
     if(!res.ok){ toast2('⚠️ ' + (data.error || 'Action impossible')); return; }
-    toast2(statut === 'en_route' ? '🛵 Course marquée en route' : '✅ Course marquée comme livrée');
+    if(statut === 'en_route'){
+      toast2('🛵 Course marquée en route — partage de votre position GPS activé');
+      demarrerPartagePosition(id);
+    } else {
+      toast2('✅ Course marquée comme livrée');
+      arreterPartagePosition();
+    }
     loadCoursesLivreur();
   }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
 }
