@@ -1460,7 +1460,7 @@ async function loadOffres(){
         ${p.livreur && p.livreur.photo ? `<img src="${p.livreur.photo}" style="width:52px;height:52px;border-radius:50%;object-fit:cover">` : '<div class="lv-av">🧑🏿</div>'}
         <div class="lv-body">
           <div class="lv-name">${p.livreur ? p.livreur.prenom + ' ' + p.livreur.nom : 'Livreur'}</div>
-          <div class="lv-meta"><span>🏍️ ${p.livreur && p.livreur.vehicule || 'Véhicule non précisé'}</span><span>📍 ${p.livreur && p.livreur.zone || 'Zone non précisée'}</span></div>
+          <div class="lv-meta"><span>🏍️ ${p.livreur && p.livreur.vehicule || 'Véhicule non précisé'}</span><span>📍 ${p.livreur && p.livreur.zone || 'Zone non précisée'}</span>${p.livreur && p.livreur.moyenne ? `<span>⭐ ${p.livreur.moyenne} (${p.livreur.nombre} avis)</span>` : '<span style="color:#bbb">Pas encore noté</span>'}</div>
           ${p.message ? `<div style="font-size:12px;color:#999;margin-top:4px">💬 ${p.message}</div>` : ''}
         </div>
         <div class="lv-right">
@@ -1558,7 +1558,7 @@ async function loadSuivi(){
           <div class="sv-num">#${c.id.slice(-6).toUpperCase()}</div>
           <span class="sv-badge">${libelleStatut(c.statut)}</span>
         </div>
-        <div class="sv-field"><span class="sv-fl">Livreur</span><span class="sv-fv">${c.livreur ? c.livreur.prenom + ' ' + c.livreur.nom : 'Pas encore assigné'}</span></div>
+        <div class="sv-field"><span class="sv-fl">Livreur</span><span class="sv-fv">${c.livreur ? c.livreur.prenom + ' ' + c.livreur.nom + (c.livreur.moyenne ? ' · ⭐ ' + c.livreur.moyenne : '') : 'Pas encore assigné'}</span></div>
         ${c.livreur ? `<div class="sv-field"><span class="sv-fl">Téléphone livreur</span><span class="sv-fv">${c.livreur.telephone || '—'}</span></div>` : ''}
         <div class="sv-field"><span class="sv-fl">Départ</span><span class="sv-fv">${c.depart}</span></div>
         <div class="sv-field"><span class="sv-fl">Arrivée</span><span class="sv-fv">${c.arrivee}</span></div>
@@ -1567,6 +1567,8 @@ async function loadSuivi(){
         <div class="sv-prix">${c.prix ? c.prix.toLocaleString('fr-FR') + ' FCFA' : c.prixSuggere.toLocaleString('fr-FR') + ' FCFA (suggéré)'}</div>
         ${c.statut === 'en_attente' ? `<button class="btn-full" style="grid-column:unset" onclick="commandeActuelleId='${c.id}';gp('offres',null)">Choisir un livreur</button>` : ''}
         ${(c.statut === 'en_attente' || c.statut === 'acceptee') ? `<button class="btn-sm-o" style="margin-top:8px" onclick="annulerCommande('${c.id}')">Annuler la commande</button>` : ''}
+        ${c.statut === 'livree' && !c.noteDonnee ? `<button class="btn-full" style="grid-column:unset;margin-top:8px" onclick="ouvrirNotation('${c.id}')">⭐ Noter ce livreur</button>` : ''}
+        ${c.statut === 'livree' && c.noteDonnee ? `<p style="text-align:center;color:#aaa;font-size:12px;margin-top:8px">✅ Vous avez déjà noté cette livraison</p>` : ''}
       </div>`).join('');
   }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
 }
@@ -1580,6 +1582,28 @@ async function annulerCommande(id){
     const data = await res.json();
     if(!res.ok){ toast2('⚠️ ' + (data.error || 'Impossible d’annuler')); return; }
     toast2('🚫 Commande annulée');
+    loadSuivi();
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+function ouvrirNotation(commandeId){
+  const note = prompt('Notez votre livreur de 1 à 5 étoiles (ex: 5) :');
+  if(!note) return;
+  const noteNum = Number(note);
+  if(!noteNum || noteNum < 1 || noteNum > 5){ toast2('⚠️ Merci d’indiquer une note entre 1 et 5'); return; }
+  const commentaire = prompt('Un commentaire (facultatif) :') || '';
+  noterLivreur(commandeId, noteNum, commentaire);
+}
+
+async function noterLivreur(commandeId, note, commentaire){
+  try{
+    const res = await fetch('/api/commandes/' + commandeId + '/noter', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin', body: JSON.stringify({ note, commentaire })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Impossible d’enregistrer votre avis')); return; }
+    toast2('✅ Merci pour votre avis !');
     loadSuivi();
   }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
 }
