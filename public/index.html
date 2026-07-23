@@ -889,14 +889,14 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
         <p class="cf-sub">Nous répondons dans les 2 heures en moyenne</p>
         <div style="display:flex;flex-direction:column;gap:12px">
           <div class="form-grid" style="grid-template-columns:1fr 1fr">
-            <div class="fg"><label>Prénom *</label><input type="text" placeholder="Votre prénom"></div>
-            <div class="fg"><label>Nom *</label><input type="text" placeholder="Votre nom"></div>
+            <div class="fg"><label>Prénom *</label><input type="text" id="ct-prenom" placeholder="Votre prénom"></div>
+            <div class="fg"><label>Nom *</label><input type="text" id="ct-nom" placeholder="Votre nom"></div>
           </div>
-          <div class="fg"><label>Email *</label><input type="email" placeholder="votre@email.com"></div>
-          <div class="fg"><label>Téléphone</label><input type="tel" placeholder="+221 7X XXX XX XX"></div>
-          <div class="fg"><label>Sujet</label><select><option>Question générale</option><option>Problème de livraison</option><option>Devenir livreur</option><option>Partenariat</option><option>Autre</option></select></div>
-          <div class="fg"><label>Message *</label><textarea style="height:110px" placeholder="Décrivez votre demande en détail..."></textarea></div>
-          <button class="btn-full" style="grid-column:unset" onclick="toast2('✅ Message envoyé ! Nous vous répondrons sous 2h.')">📨 Envoyer le message</button>
+          <div class="fg"><label>Email *</label><input type="email" id="ct-email" placeholder="votre@email.com"></div>
+          <div class="fg"><label>Téléphone</label><input type="tel" id="ct-tel" placeholder="+221 7X XXX XX XX"></div>
+          <div class="fg"><label>Sujet</label><select id="ct-sujet"><option>Question générale</option><option>Problème de livraison</option><option>Devenir livreur</option><option>Partenariat</option><option>Autre</option></select></div>
+          <div class="fg"><label>Message *</label><textarea id="ct-message" style="height:110px" placeholder="Décrivez votre demande en détail..."></textarea></div>
+          <button class="btn-full" style="grid-column:unset" onclick="envoyerContact()">📨 Envoyer le message</button>
         </div>
       </div>
     </div>
@@ -1721,6 +1721,33 @@ function toast2(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+async function envoyerContact(){
+  const prenom = document.getElementById('ct-prenom').value.trim();
+  const nom = document.getElementById('ct-nom').value.trim();
+  const email = document.getElementById('ct-email').value.trim();
+  const telephone = document.getElementById('ct-tel').value.trim();
+  const sujet = document.getElementById('ct-sujet').value;
+  const message = document.getElementById('ct-message').value.trim();
+
+  if(!prenom || !nom || !email || !message){ toast2('⚠️ Merci de remplir les champs obligatoires'); return; }
+
+  try{
+    const res = await fetch('/api/contact', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ prenom, nom, email, telephone, sujet, message })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Impossible d’envoyer le message')); return; }
+    toast2('✅ Message envoyé ! Nous vous répondrons sous 2h.');
+    document.getElementById('ct-prenom').value = '';
+    document.getElementById('ct-nom').value = '';
+    document.getElementById('ct-email').value = '';
+    document.getElementById('ct-tel').value = '';
+    document.getElementById('ct-message').value = '';
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
 }
 </script>
 </body>
