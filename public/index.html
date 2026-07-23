@@ -540,7 +540,9 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
             <div class="pkg" onclick="selPkg(this,500,'Document')"><span class="pkg-ico">📄</span><span class="pkg-nm">Document</span></div>
           </div></div>
           <div class="fg" style="grid-column:1/-1"><label>📝 Description du colis</label><textarea id="cmd-desc" placeholder="Contenu, fragilité, poids approximatif, instructions spéciales..."></textarea></div>
-          <div class="fg"><label>📞 Votre téléphone *</label><input type="tel" placeholder="+221 7X XXX XX XX" id="f-phone"></div>
+          <div class="fg"><label>📞 Votre téléphone *</label><input type="tel" placeholder="+221 7X XXX XX XX" id="f-phone" oninput="checkPhoneField('f-phone')">
+            <div id="f-phone-msg" style="font-size:11px;margin-top:4px"></div>
+          </div>
           <div class="fg"><label>💳 Mode de paiement</label><select id="cmd-paiement"><option>Wave</option><option>Orange Money</option><option>Free Money</option><option>Espèces à la livraison</option></select></div>
           <div class="prix-preview">
             <div class="pp-r"><span>Frais de base</span><span id="base-p">500 FCFA</span></div>
@@ -724,7 +726,9 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
             <input type="email" id="rc-email" placeholder="votre@email.com" oninput="checkEmailField('rc-email')">
             <div id="rc-email-msg" style="font-size:11px;margin-top:4px"></div>
           </div>
-          <div class="fg"><label>Téléphone *</label><input type="tel" id="rc-tel" placeholder="+221 7X XXX XX XX"></div>
+          <div class="fg"><label>Téléphone *</label><input type="tel" id="rc-tel" placeholder="+221 7X XXX XX XX" oninput="checkPhoneField('rc-tel')">
+            <div id="rc-tel-msg" style="font-size:11px;margin-top:4px"></div>
+          </div>
           <div class="fg">
             <label>Mot de passe *</label>
             <input type="password" id="rc-pass" placeholder="8 caractères min., avec au moins une lettre et un chiffre" oninput="checkPasswordField('rc-pass')">
@@ -753,7 +757,9 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
             <input type="email" id="rl-email" placeholder="votre@email.com" oninput="checkEmailField('rl-email')">
             <div id="rl-email-msg" style="font-size:11px;margin-top:4px"></div>
           </div>
-          <div class="fg"><label>Téléphone *</label><input type="tel" id="rl-tel" placeholder="+221 7X XXX XX XX"></div>
+          <div class="fg"><label>Téléphone *</label><input type="tel" id="rl-tel" placeholder="+221 7X XXX XX XX" oninput="checkPhoneField('rl-tel')">
+            <div id="rl-tel-msg" style="font-size:11px;margin-top:4px"></div>
+          </div>
           <div class="fg">
             <label>Mot de passe *</label>
             <input type="password" id="rl-pass" placeholder="8 caractères min., avec au moins une lettre et un chiffre" oninput="checkPasswordField('rl-pass')">
@@ -1083,6 +1089,20 @@ function checkEmailField(inputId){
   msg.style.color = ok ? 'var(--gr)' : '#c0392b';
 }
 
+// Valide un numéro sénégalais : +221 ou 00221 (optionnel) suivi de 9 chiffres commençant par 7 (mobile)
+function telephoneSenegalaisValide(val){
+  const nettoye = String(val || '').replace(/[\s.-]/g, '');
+  return /^(\+221|00221)?7[0-8]\d{7}$/.test(nettoye);
+}
+function checkPhoneField(inputId){
+  const val = document.getElementById(inputId).value.trim();
+  const msg = document.getElementById(inputId + '-msg');
+  if(!val){ msg.textContent = ''; return; }
+  const ok = telephoneSenegalaisValide(val);
+  msg.textContent = ok ? '✅ Format valide' : '⚠️ Format attendu : +221 7X XXX XX XX';
+  msg.style.color = ok ? 'var(--gr)' : '#c0392b';
+}
+
 function checkPasswordField(inputId){
   const val = document.getElementById(inputId).value;
   const bar = document.getElementById(inputId + '-bar');
@@ -1149,6 +1169,7 @@ async function registerUser(role){
   const password = document.getElementById(p+'-pass').value;
 
   if(!prenom || !nom || !email || !telephone || !password){ toast2('⚠️ Merci de remplir tous les champs obligatoires'); return; }
+  if(!telephoneSenegalaisValide(telephone)){ toast2('⚠️ Numéro de téléphone invalide (format attendu : +221 7X XXX XX XX)'); return; }
   if(role === 'livreur'){
     const permisFile = document.getElementById('rl-permis').files[0];
     if(!permisFile){ toast2('⚠️ La photo de la pièce d’identité / permis est obligatoire pour les livreurs'); return; }
@@ -1517,6 +1538,7 @@ async function soumettreCommande(){
   const distanceKm = document.getElementById('cmd-distance').value;
   const telephone = document.getElementById('f-phone').value.trim();
   if(!depart || !arrivee || !telephone){ toast2('⚠️ Merci de remplir le départ, l’arrivée et le téléphone'); return; }
+  if(!telephoneSenegalaisValide(telephone)){ toast2('⚠️ Numéro de téléphone invalide (format attendu : +221 7X XXX XX XX)'); return; }
 
   const body = {
     depart, arrivee,
