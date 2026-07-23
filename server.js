@@ -192,6 +192,12 @@ app.use(session({
 }));
 
 // ---------- routes API ----------
+// Numéro sénégalais : +221 ou 00221 (optionnel) suivi de 9 chiffres commençant par 7 (mobile)
+function telephoneSenegalaisValide(val) {
+  const nettoye = String(val || '').replace(/[\s.-]/g, '');
+  return /^(\+221|00221)?7[0-8]\d{7}$/.test(nettoye);
+}
+
 app.post('/api/register', limiterAbus('register', 5, 15 * 60 * 1000), (req, res, next) => {
   upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'permis', maxCount: 1 }])(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
@@ -209,6 +215,9 @@ app.post('/api/register', limiterAbus('register', 5, 15 * 60 * 1000), (req, res,
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!EMAIL_REGEX.test(String(email).trim())) {
     return res.status(400).json({ error: 'Adresse email invalide (format attendu: nom@exemple.com)' });
+  }
+  if (!telephoneSenegalaisValide(telephone)) {
+    return res.status(400).json({ error: 'Numéro de téléphone invalide (format attendu : +221 7X XXX XX XX)' });
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
@@ -520,6 +529,9 @@ app.post('/api/commandes', requireLogin, limiterAbus('commandes', 10, 60 * 60 * 
   const { depart, arrivee, typeColis, prixBase, distanceKm, poids, description, telephone, paiement } = req.body || {};
   if (!depart || !arrivee || !typeColis || !telephone) {
     return res.status(400).json({ error: 'Merci de remplir les champs obligatoires (départ, arrivée, type de colis, téléphone)' });
+  }
+  if (!telephoneSenegalaisValide(telephone)) {
+    return res.status(400).json({ error: 'Numéro de téléphone invalide (format attendu : +221 7X XXX XX XX)' });
   }
 
   const { distanceKm: distanceFinale, source: distanceSource } = await estimerDistance(depart, arrivee, distanceKm);
