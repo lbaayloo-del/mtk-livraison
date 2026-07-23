@@ -132,6 +132,24 @@ function publicUser(u) {
   return rest;
 }
 
+// ---------- Anti-abus : limite simple par IP (en mémoire) ----------
+// Empêche qu'une même IP spamme l'inscription ou la création de commandes.
+// Note : la mémoire se vide au redémarrage du serveur, ce n'est pas un souci pour un usage anti-spam basique.
+const compteurRequetes = new Map(); // clé: "type:ip" -> [timestamps]
+function limiterAbus(type, maxRequetes, fenetreMs) {
+  return (req, res, next) => {
+    const cle = type + ':' + (req.ip || 'inconnu');
+    const maintenant = Date.now();
+    const historique = (compteurRequetes.get(cle) || []).filter(t => maintenant - t < fenetreMs);
+    if (historique.length >= maxRequetes) {
+      return res.status(429).json({ error: 'Trop de tentatives, merci de patienter quelques minutes avant de réessayer' });
+    }
+    historique.push(maintenant);
+    compteurRequetes.set(cle, historique);
+    next();
+  };
+}
+
 // Calcule la note moyenne d'un livreur à partir des avis reçus (stockés dans u.avis)
 function noteMoyenneLivreur(livreur) {
   const avis = livreur && livreur.avis ? livreur.avis : [];
@@ -174,7 +192,7 @@ app.use(session({
 }));
 
 // ---------- routes API ----------
-app.post('/api/register', (req, res, next) => {
+app.post('/api/register', limiterAbus('register', 5, 15 * 60 * 1000), (req, res, next) => {
   upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'permis', maxCount: 1 }])(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message });
     next();
@@ -302,7 +320,7 @@ app.post('/api/renvoyer-verification', requireLogin, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', limiterAbus('login', 10, 15 * 60 * 1000), async (req, res) => {
   const { email, password } = req.body || {};
   const db = await loadDB();
   const user = db.users.find(u => u.email === String(email || '').trim().toLowerCase());
@@ -315,6 +333,43 @@ app.post('/api/login', async (req, res) => {
 
 app.post('/api/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
+});
+
+// ---------- Formulaire de contact ----------
+// GMAIL_USER sert aussi d'adresse de réception pour les messages de contact.
+app.post('/api/contact', limiterAbus('contact', 3, 10 * 60 * 1000), async (req, res) => {
+  const { prenom, nom, email, telephone, sujet, message } = req.body || {};
+  if (!prenom || !nom || !email || !message) {
+    return res.status(400).json({ error: 'Merci de remplir les champs obligatoires' });
+  }
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!EMAIL_REGEX.test(String(email).trim())) {
+    return res.status(400).json({ error: 'Adresse email invalide' });
+  }
+  if (String(message).length > 3000) {
+    return res.status(400).json({ error: 'Message trop long' });
+  }
+
+  if (!EMAIL_ACTIF) {
+    console.log('⚠️ Message de contact reçu mais email non configuré:', { prenom, nom, email, sujet });
+    return res.json({ ok: true });
+  }
+
+  const envoye = await envoyerEmail(
+    GMAIL_USER,
+    'Nouveau message de contact — ' + (sujet || 'MTK Livraison'),
+    `<div style="font-family:sans-serif;max-width:520px;margin:auto">
+      <h2 style="color:#FF6B00">Nouveau message de contact</h2>
+      <p><strong>Nom :</strong> ${prenom} ${nom}</p>
+      <p><strong>Email :</strong> ${email}</p>
+      <p><strong>Téléphone :</strong> ${telephone || 'non renseigné'}</p>
+      <p><strong>Sujet :</strong> ${sujet || 'non précisé'}</p>
+      <p><strong>Message :</strong></p>
+      <p style="white-space:pre-wrap;background:#f8f8f8;padding:12px;border-radius:8px">${String(message).replace(/</g, '&lt;')}</p>
+    </div>`
+  );
+  if (!envoye) return res.status(500).json({ error: 'Échec de l’envoi, réessayez plus tard' });
+  res.json({ ok: true });
 });
 
 // ---------- Mot de passe oublié ----------
@@ -458,7 +513,7 @@ function calculerPrix(prixBase, distanceKm) {
   return base + Math.round(dist * TARIF_KM);
 }
 
-app.post('/api/commandes', requireLogin, async (req, res) => {
+app.post('/api/commandes', requireLogin, limiterAbus('commandes', 10, 60 * 60 * 1000), async (req, res) => {
   if (req.currentUser.role !== 'client') {
     return res.status(403).json({ error: 'Seuls les clients peuvent passer commande' });
   }
