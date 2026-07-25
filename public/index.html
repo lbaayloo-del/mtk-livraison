@@ -835,6 +835,23 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
       <div id="admin-tbody"></div>
     </div>
     <p style="margin-top:14px;font-size:11px;color:#aaa">🔒 Ces données sont stockées côté serveur (mots de passe chiffrés). Seul un compte administrateur peut voir cette liste.</p>
+
+    <div style="margin-top:36px">
+      <div class="stag">Suivi des livraisons</div>
+      <h2 style="font-size:20px;margin-bottom:14px">Toutes les commandes</h2>
+      <div class="kpis" style="margin-bottom:20px">
+        <div class="kpi"><div class="kpi-v" id="admin-kc-total">0</div><div class="kpi-l">Commandes totales</div></div>
+        <div class="kpi"><div class="kpi-v" style="color:var(--or)" id="admin-kc-encours">0</div><div class="kpi-l">En cours</div></div>
+        <div class="kpi"><div class="kpi-v" style="color:var(--gr)" id="admin-kc-livrees">0</div><div class="kpi-l">Livrées</div></div>
+      </div>
+      <div class="table-card">
+        <div class="tc-hd"><h4>Commandes</h4><button class="voir-plus" onclick="renderAdminCommandes()">🔄 Rafraîchir</button></div>
+        <div class="tbl-hd" style="grid-template-columns:0.8fr 1fr 1fr 1fr 0.8fr 0.9fr">
+          <span>N°</span><span>Client</span><span>Livreur</span><span>Trajet</span><span>Prix</span><span>Statut</span>
+        </div>
+        <div id="admin-commandes-tbody"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1369,6 +1386,29 @@ async function renderAdmin(){
   }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
 }
 
+async function renderAdminCommandes(){
+  try{
+    const res = await fetch('/api/admin/commandes', { credentials: 'same-origin' });
+    if(!res.ok){ toast2('⛔ Accès réservé'); return; }
+    const data = await res.json();
+    const commandes = data.commandes || [];
+    document.getElementById('admin-kc-total').textContent = commandes.length;
+    document.getElementById('admin-kc-encours').textContent = commandes.filter(c => ['en_attente','acceptee','en_route'].includes(c.statut)).length;
+    document.getElementById('admin-kc-livrees').textContent = commandes.filter(c => c.statut === 'livree').length;
+    const tbody = document.getElementById('admin-commandes-tbody');
+    const rows = commandes.map(c => `
+      <div class="tbl-r" style="grid-template-columns:0.8fr 1fr 1fr 1fr 0.8fr 0.9fr">
+        <span class="tid">#${c.id.slice(-6).toUpperCase()}</span>
+        <span>${c.client ? c.client.prenom + ' ' + c.client.nom : '—'}<br><span style="color:#aaa;font-size:11px">${c.client ? c.client.telephone : ''}</span></span>
+        <span>${c.livreur ? c.livreur.prenom + ' ' + c.livreur.nom : '—'}</span>
+        <span style="font-size:11px">${c.depart} → ${c.arrivee}</span>
+        <span>${c.prix ? c.prix.toLocaleString('fr-FR') + ' F' : c.prixSuggere.toLocaleString('fr-FR') + ' F'}</span>
+        <span><span class="bs ${c.statut === 'livree' ? 'bs-ok' : 'bs-ec'}">${libelleStatut(c.statut)}</span></span>
+      </div>`).join('');
+    tbody.innerHTML = rows || '<div style="padding:24px;text-align:center;color:#aaa;font-size:12px">Aucune commande pour le moment</div>';
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
 async function changerStatut(id, statut){
   try{
     const res = await fetch('/api/admin/users/' + id + '/statut', {
@@ -1423,7 +1463,7 @@ function gp(id, el) {
   document.querySelectorAll('.hn').forEach(b => b.classList.remove('act'));
   if (el && el.classList) el.classList.add('act');
   arreterAutoRefresh();
-  if(id === 'admin') renderAdmin();
+  if(id === 'admin'){ renderAdmin(); renderAdminCommandes(); }
   if(id === 'dashboard') renderClientDashboard();
   if(id === 'livreur-espace'){
     renderLivreurEspace(); loadCoursesLivreur(); loadDemandesDisponibles();
@@ -1756,7 +1796,7 @@ async function loadCoursesLivreur(){
         <div class="sv-field"><span class="sv-fl">Départ</span><span class="sv-fv">${c.depart}</span></div>
         <div class="sv-field"><span class="sv-fl">Arrivée</span><span class="sv-fv">${c.arrivee}</span></div>
         <div class="sv-prix">${c.prix.toLocaleString('fr-FR')} FCFA</div>
-        ${c.statut === 'acceptee' ? `<button class="btn-full" style="grid-column:unset" onclick="majStatutCommande('${c.id}','en_route')">🛵 Marquer en route</button>` : ''}
+        ${c.statut === 'acceptee' ? `<button class="btn-full" style="grid-column:unset" onclick="majStatutCommande('${c.id}','en_route')">🛵 Marquer en route</button><button class="btn-sm-o" style="margin-top:8px;width:100%" onclick="desisterCommande('${c.id}')">Me désister de cette course</button>` : ''}
         ${c.statut === 'en_route' ? `<p style="text-align:center;color:var(--gr);font-size:12px;margin:6px 0">📡 Partage de votre position GPS actif</p><button class="btn-full" style="grid-column:unset" onclick="majStatutCommande('${c.id}','livree')">✅ Marquer comme livrée</button>` : ''}
       </div>`).join('');
 
@@ -1803,6 +1843,17 @@ async function majStatutCommande(id, statut){
       toast2('✅ Course marquée comme livrée');
       arreterPartagePosition();
     }
+    loadCoursesLivreur();
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
+}
+
+async function desisterCommande(id){
+  if(!confirm('Voulez-vous vraiment vous désister de cette course ? Elle redeviendra disponible pour les autres livreurs.')) return;
+  try{
+    const res = await fetch('/api/commandes/' + id + '/desister', { method: 'POST', credentials: 'same-origin' });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Impossible de vous désister')); return; }
+    toast2('↩️ Vous vous êtes désisté de cette course');
     loadCoursesLivreur();
   }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
 }
