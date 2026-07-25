@@ -204,13 +204,16 @@ app.post('/api/register', limiterAbus('register', 5, 15 * 60 * 1000), (req, res,
     next();
   });
 }, async (req, res) => {
-  const { role, prenom, nom, email, telephone, password, vehicule, zone } = req.body;
+  const { role, prenom, nom, email, telephone, password, vehicule, zone, accepteCGU } = req.body;
 
   if (!['client', 'livreur'].includes(role)) {
     return res.status(400).json({ error: 'Rôle invalide' });
   }
   if (!prenom || !nom || !email || !telephone || !password) {
     return res.status(400).json({ error: 'Merci de remplir tous les champs obligatoires' });
+  }
+  if (accepteCGU !== 'true' && accepteCGU !== true) {
+    return res.status(400).json({ error: 'Vous devez accepter les conditions d’utilisation pour créer un compte' });
   }
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!EMAIL_REGEX.test(String(email).trim())) {
@@ -428,6 +431,23 @@ app.post('/api/reinitialiser-mot-de-passe', async (req, res) => {
   user.password = bcrypt.hashSync(password, 10);
   user.tokenResetPassword = null;
   user.tokenResetExpire = null;
+  await saveDB(db);
+  res.json({ ok: true });
+});
+
+// Changement de mot de passe depuis le profil, pour un utilisateur déjà connecté (nécessite l'ancien mot de passe)
+app.post('/api/changer-mot-de-passe', requireLogin, async (req, res) => {
+  const { ancienMotDePasse, nouveauMotDePasse } = req.body || {};
+  if (!ancienMotDePasse || !nouveauMotDePasse) return res.status(400).json({ error: 'Requête invalide' });
+  if (nouveauMotDePasse.length < 8 || !/[a-zA-Z]/.test(nouveauMotDePasse) || !/[0-9]/.test(nouveauMotDePasse)) {
+    return res.status(400).json({ error: 'Le nouveau mot de passe doit contenir au moins 8 caractères, avec au moins une lettre et un chiffre' });
+  }
+  const db = await loadDB();
+  const user = db.users.find(u => u.id === req.currentUser.id);
+  if (!user || !bcrypt.compareSync(ancienMotDePasse, user.password)) {
+    return res.status(401).json({ error: 'Ancien mot de passe incorrect' });
+  }
+  user.password = bcrypt.hashSync(nouveauMotDePasse, 10);
   await saveDB(db);
   res.json({ ok: true });
 });
