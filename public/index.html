@@ -594,6 +594,7 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
         <button class="dsi act">📊 <span>Tableau de bord</span></button>
         <button class="dsi" onclick="gp('suivi',null)">📋 <span>Mes commandes</span></button>
         <button class="dsi" onclick="gp('commander',null)">➕ <span>Nouvelle commande</span></button>
+        <button class="dsi" onclick="ouvrirChangementMotDePasse()">🔑 <span>Changer mon mot de passe</span></button>
         <button class="dsi" onclick="logout()">🚪 <span>Déconnexion</span></button>
       </div>
       <div class="dash-main">
@@ -720,6 +721,10 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
             </div>
             <input type="file" id="rc-photo" accept="image/*" style="display:none" onchange="previewImg(this,'rc-photo-img','rc-photo-zone')">
           </div>
+          <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#666;cursor:pointer">
+            <input type="checkbox" id="rc-cgu" style="margin-top:2px">
+            <span>J'accepte les <a href="#" onclick="event.stopPropagation();gp('conditions',null)" style="color:var(--or);font-weight:600">Conditions d'utilisation</a> et la <a href="#" onclick="event.stopPropagation();gp('confidentialite',null)" style="color:var(--or);font-weight:600">Politique de confidentialité</a> *</span>
+          </label>
           <button class="btn-full" style="grid-column:unset" onclick="registerUser('client')">🚀 Créer mon compte client</button>
         </div>
 
@@ -763,6 +768,10 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
             </div>
             <input type="file" id="rl-permis" accept="image/*" style="display:none" onchange="previewImg(this,'rl-permis-img','rl-permis-zone')">
           </div>
+          <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#666;cursor:pointer">
+            <input type="checkbox" id="rl-cgu" style="margin-top:2px">
+            <span>J'accepte les <a href="#" onclick="event.stopPropagation();gp('conditions',null)" style="color:var(--or);font-weight:600">Conditions d'utilisation</a> et la <a href="#" onclick="event.stopPropagation();gp('confidentialite',null)" style="color:var(--or);font-weight:600">Politique de confidentialité</a> *</span>
+          </label>
           <button class="btn-full" style="grid-column:unset" onclick="registerUser('livreur')">🚀 Créer mon compte livreur</button>
         </div>
 
@@ -794,6 +803,10 @@ footer{background:var(--dk);color:#fff;padding:56px 0 24px}
             <div>🏍️ <span id="ll-vehicule"></span></div>
             <div>📍 <span id="ll-zone"></span></div>
             <div>📎 Pièce d'identité : <span id="ll-permis-status"></span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;border-top:1px solid #f0f0f0;padding-top:14px">
+            <button class="btn-sm-o" onclick="ouvrirChangementMotDePasse()">🔑 Changer mon mot de passe</button>
+            <button class="btn-sm-o" onclick="logout()">🚪 Déconnexion</button>
           </div>
         </div>
       </div>
@@ -1163,6 +1176,8 @@ async function registerUser(role){
 
   if(!prenom || !nom || !email || !telephone || !password){ toast2('⚠️ Merci de remplir tous les champs obligatoires'); return; }
   if(!telephoneSenegalaisValide(telephone)){ toast2('⚠️ Numéro de téléphone invalide (format attendu : +221 7X XXX XX XX)'); return; }
+  const cguAcceptees = document.getElementById(p+'-cgu').checked;
+  if(!cguAcceptees){ toast2('⚠️ Merci d’accepter les conditions d’utilisation pour continuer'); return; }
   if(role === 'livreur'){
     const permisFile = document.getElementById('rl-permis').files[0];
     if(!permisFile){ toast2('⚠️ La photo de la pièce d’identité / permis est obligatoire pour les livreurs'); return; }
@@ -1175,6 +1190,7 @@ async function registerUser(role){
   fd.append('email', email);
   fd.append('telephone', telephone);
   fd.append('password', password);
+  fd.append('accepteCGU', 'true');
   const photoFile = document.getElementById(p+'-photo').files[0];
   if(photoFile) fd.append('photo', photoFile);
   if(role === 'livreur'){
@@ -1243,6 +1259,25 @@ async function logout(){
   refreshHeader();
   toast2('👋 Vous êtes déconnecté(e)');
   gp('accueil', null);
+}
+
+function ouvrirChangementMotDePasse(){
+  const ancien = prompt('Entrez votre mot de passe actuel :');
+  if(!ancien) return;
+  const nouveau = prompt('Entrez votre nouveau mot de passe (8 caractères min., avec au moins une lettre et un chiffre) :');
+  if(!nouveau) return;
+  changerMotDePasse(ancien, nouveau);
+}
+async function changerMotDePasse(ancienMotDePasse, nouveauMotDePasse){
+  try{
+    const res = await fetch('/api/changer-mot-de-passe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin', body: JSON.stringify({ ancienMotDePasse, nouveauMotDePasse })
+    });
+    const data = await res.json();
+    if(!res.ok){ toast2('⚠️ ' + (data.error || 'Impossible de changer le mot de passe')); return; }
+    toast2('✅ Mot de passe changé avec succès !');
+  }catch(e){ toast2('❌ Impossible de contacter le serveur'); }
 }
 
 function refreshHeader(){
