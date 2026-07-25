@@ -710,7 +710,21 @@ app.patch('/api/commandes/:id/statut', requireLogin, async (req, res) => {
   res.json({ commande: enrichirCommande(db, commande, 'client') });
 });
 
-// Le livreur envoie sa position GPS pendant une course "en_route" (toutes les 10-15s côté frontend)
+// Le livreur peut se désister d'une course qu'il a acceptée (avant de passer "en route") :
+// la commande retourne en attente pour que d'autres livreurs puissent proposer un prix.
+app.post('/api/commandes/:id/desister', requireLogin, async (req, res) => {
+  const db = await loadDB();
+  const commande = (db.commandes || []).find(c => c.id === req.params.id);
+  if (!commande) return res.status(404).json({ error: 'Commande introuvable' });
+  if (commande.livreurId !== req.currentUser.id) return res.status(403).json({ error: 'Seul le livreur assigné peut se désister de cette course' });
+  if (commande.statut !== 'acceptee') return res.status(400).json({ error: 'Vous ne pouvez plus vous désister une fois la livraison en route' });
+
+  commande.statut = 'en_attente';
+  commande.livreurId = null;
+  commande.prix = null;
+  await saveDB(db);
+  res.json({ ok: true });
+});
 app.post('/api/commandes/:id/position', requireLogin, async (req, res) => {
   const { lat, lon } = req.body || {};
   const latNum = Number(lat), lonNum = Number(lon);
@@ -757,6 +771,16 @@ app.post('/api/commandes/:id/noter', requireLogin, async (req, res) => {
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   const db = await loadDB();
   res.json({ users: db.users.map(publicUser) });
+});
+
+// L'admin peut voir toutes les commandes de la plateforme, avec les infos client/livreur,
+// pour pouvoir répondre à un appel ou résoudre un litige.
+app.get('/api/admin/commandes', requireAdmin, async (req, res) => {
+  const db = await loadDB();
+  const commandes = (db.commandes || [])
+    .sort((a, b) => new Date(b.dateCreation) - new Date(a.dateCreation))
+    .map(c => enrichirCommande(db, c, 'client'));
+  res.json({ commandes });
 });
 
 app.patch('/api/admin/users/:id/statut', requireAdmin, async (req, res) => {
